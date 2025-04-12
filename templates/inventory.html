@@ -1,16 +1,83 @@
 {% extends 'layout.html' %}
 {% block content %}
-<a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
-<form method="POST" action="/inventory/scan" class="mb-3">
-  <input name="barcode" placeholder="Scan barcode" class="form-control" required>
-  <button type="submit" class="btn btn-primary mt-2">Submit Scan</button>
+<h4>Inventory</h4>
+
+<!-- Barcode Scan Section -->
+<h5>Scan Medicine Barcode</h5>
+<div class="mb-2">
+  <button type="button" id="start-btn" class="btn btn-primary" onclick="startCamera()">Start Scan</button>
+  <button type="button" id="stop-btn" class="btn btn-secondary" onclick="stopCamera()" disabled>Stop Scan</button>
+</div>
+<div id="reader" style="width: 300px;"></div>
+
+<form method="POST" action="/inventory/scan" id="barcode-form">
+  <input type="hidden" name="barcode" id="barcode-input">
+  <button type="submit" class="btn btn-success mt-2">Submit Manually</button>
 </form>
-<table class="table table-striped">
-  <thead><tr><th>Name</th><th>Stock</th><th>Barcode</th><th>Price</th></tr></thead>
+
+<hr>
+
+<!-- Medicine Table -->
+<a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th><th>Type</th><th>Price</th><th>Stock</th><th>Expiry</th>
+    </tr>
+  </thead>
   <tbody>
     {% for m in medicines %}
-    <tr><td>{{ m.name }}</td><td>{{ m.stock }}</td><td>{{ m.barcode }}</td><td>{{ m.price }}</td></tr>
+    <tr>
+      <td>{{ m.name }}</td>
+      <td>{{ m.type }}</td>
+      <td>{{ m.price }}</td>
+      <td>{{ m.stock }}</td>
+      <td>{{ m.expiry_date }}</td>
+    </tr>
     {% endfor %}
   </tbody>
 </table>
+
+<!-- Scanner Script -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  const html5QrCode = new Html5Qrcode("reader");
+  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+  let cameraStarted = false;
+  let currentCameraId = null;
+
+  function onScanSuccess(decodedText, decodedResult) {
+    document.getElementById('barcode-input').value = decodedText;
+    document.getElementById('barcode-form').submit();
+  }
+
+  async function startCamera() {
+    if (cameraStarted) return;
+
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices.length) {
+        currentCameraId = devices[0].id;
+        await html5QrCode.start(currentCameraId, config, onScanSuccess);
+        cameraStarted = true;
+        document.getElementById("start-btn").disabled = true;
+        document.getElementById("stop-btn").disabled = false;
+      } else {
+        alert("No camera found.");
+      }
+    } catch (err) {
+      console.error("Camera error:", err);
+    }
+  }
+
+  async function stopCamera() {
+    if (!cameraStarted) return;
+
+    await html5QrCode.stop();
+    html5QrCode.clear();
+    cameraStarted = false;
+    document.getElementById("start-btn").disabled = false;
+    document.getElementById("stop-btn").disabled = true;
+  }
+</script>
 {% endblock %}
