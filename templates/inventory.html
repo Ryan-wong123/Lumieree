@@ -2,17 +2,24 @@
 {% block content %}
 <h4>Inventory</h4>
 
-<!-- Barcode Scan Section -->
-<h5>Scan Medicine Barcode</h5>
-<div class="mb-2">
-  <button type="button" id="start-btn" class="btn btn-primary" onclick="startCamera()">Start Scan</button>
-  <button type="button" id="stop-btn" class="btn btn-secondary" onclick="stopCamera()" disabled>Stop Scan</button>
-</div>
-<div id="reader" style="width: 300px;"></div>
+<!-- Manual and Camera-Based Barcode Input -->
+<h5>Lookup / Add by Barcode</h5>
+<form method="POST" action="/inventory/scan" id="barcode-form" class="row g-2 mb-3 align-items-center">
+  <div class="col-auto">
+    <input type="text" name="barcode" id="barcode-input" class="form-control" placeholder="Enter barcode manually" required>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-success">Submit Manually</button>
+  </div>
+</form>
 
-<form method="POST" action="/inventory/scan" id="barcode-form">
-  <input type="hidden" name="barcode" id="barcode-input">
-  <button type="submit" class="btn btn-success mt-2">Submit Manually</button>
+<form method="POST" action="/inventory/scan-image" enctype="multipart/form-data" class="row g-2 mb-3 align-items-center">
+  <div class="col-auto">
+    <input type="file" name="barcode_image" accept="image/*" capture="environment" class="form-control" required>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-primary">📷 Upload Barcode Image</button>
+  </div>
 </form>
 
 <hr>
@@ -37,47 +44,4 @@
     {% endfor %}
   </tbody>
 </table>
-
-<!-- Scanner Script -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script>
-  const html5QrCode = new Html5Qrcode("reader");
-  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-  let cameraStarted = false;
-  let currentCameraId = null;
-
-  function onScanSuccess(decodedText, decodedResult) {
-    document.getElementById('barcode-input').value = decodedText;
-    document.getElementById('barcode-form').submit();
-  }
-
-  async function startCamera() {
-    if (cameraStarted) return;
-
-    try {
-      const devices = await Html5Qrcode.getCameras();
-      if (devices.length) {
-        currentCameraId = devices[0].id;
-        await html5QrCode.start(currentCameraId, config, onScanSuccess);
-        cameraStarted = true;
-        document.getElementById("start-btn").disabled = true;
-        document.getElementById("stop-btn").disabled = false;
-      } else {
-        alert("No camera found.");
-      }
-    } catch (err) {
-      console.error("Camera error:", err);
-    }
-  }
-
-  async function stopCamera() {
-    if (!cameraStarted) return;
-
-    await html5QrCode.stop();
-    html5QrCode.clear();
-    cameraStarted = false;
-    document.getElementById("start-btn").disabled = false;
-    document.getElementById("stop-btn").disabled = true;
-  }
-</script>
 {% endblock %}

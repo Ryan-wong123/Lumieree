@@ -4,6 +4,9 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 from firebase_admin import credentials, firestore, initialize_app
 import datetime
+from pyzbar.pyzbar import decode
+from PIL import Image
+import io
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -44,6 +47,36 @@ def scan_barcode():
         flash(f"Stock updated for {doc['name']}.")
     else:
         flash("Barcode not found. Please add new medicine.")
+    return redirect(url_for('inventory'))
+
+
+@app.route('/inventory/scan-image', methods=['POST'])
+def scan_image():
+    file = request.files.get('barcode_image')
+    if not file:
+        flash("No image uploaded.")
+        return redirect(url_for('inventory'))
+
+    image = Image.open(file.stream)
+    decoded = decode(image)
+
+    if not decoded:
+        flash("No barcode detected.")
+        return redirect(url_for('inventory'))
+
+    barcode = decoded[0].data.decode('utf-8')
+    query = db.collection('medicines').where('barcode', '==', barcode).limit(1).stream()
+    med = next(query, None)
+
+    if med:
+        doc = med.to_dict()
+        db.collection('medicines').document(med.id).update({
+            'stock': doc.get('stock', 0) + 1
+        })
+        flash(f"Stock updated for {doc['name']} (Barcode: {barcode})")
+    else:
+        flash(f"Barcode {barcode} not found in database.")
+
     return redirect(url_for('inventory'))
 
 # ================= Patients =================
