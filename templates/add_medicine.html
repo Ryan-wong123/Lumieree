@@ -1,0 +1,13 @@
+{% extends 'layout.html' %}
+{% block content %}
+<form method="POST">
+  <input name="name" class="form-control mb-2" placeholder="Name" required>
+  <input name="barcode" class="form-control mb-2" placeholder="Barcode" required>
+  <input name="type" class="form-control mb-2" placeholder="Type" required>
+  <input name="price" class="form-control mb-2" placeholder="Price" required>
+  <input name="stock" class="form-control mb-2" placeholder="Stock" required>
+  <input name="dosage_info" class="form-control mb-2" placeholder="Dosage Info">
+  <input type="date" name="expiry_date" class="form-control mb-3">
+  <button class="btn btn-primary">Add Medicine</button>
+</form>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'layout.html' %}
+{% block content %}
+<a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
+<form method="POST" action="/inventory/scan" class="mb-3">
+  <input name="barcode" placeholder="Scan barcode" class="form-control" required>
+  <button type="submit" class="btn btn-primary mt-2">Submit Scan</button>
+</form>
+<table class="table table-striped">
+  <thead><tr><th>Name</th><th>Stock</th><th>Barcode</th><th>Price</th></tr></thead>
+  <tbody>
+    {% for m in medicines %}
+    <tr><td>{{ m.name }}</td><td>{{ m.stock }}</td><td>{{ m.barcode }}</td><td>{{ m.price }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

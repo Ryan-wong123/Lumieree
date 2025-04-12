@@ -1,0 +1,12 @@
+{% extends 'layout.html' %}
+{% block content %}
+<a href="/patients/add" class="btn btn-success mb-3">Add Patient</a>
+<table class="table">
+  <thead><tr><th>Name</th><th>Contact</th><th>History</th></tr></thead>
+  <tbody>
+    {% for p in patients %}
+    <tr><td>{{ p.name }}</td><td>{{ p.contact }}</td><td>{{ p.medical_history }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

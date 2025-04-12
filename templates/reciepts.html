@@ -1,0 +1,12 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h4>Receipt</h4>
+<p><strong>Patient:</strong> {{ patient.name }}</p>
+<ul>
+  {% for item in items %}
+  <li>{{ item.quantity }}x {{ item.name }} @ {{ item.unit_price }} = {{ item.quantity * item.unit_price }}</li>
+  {% endfor %}
+</ul>
+<p><strong>Total:</strong> {{ total }}</p>
+<a href="/" class="btn btn-secondary">Home</a>
+{% endblock %}

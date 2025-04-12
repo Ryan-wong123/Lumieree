@@ -1,0 +1,26 @@
+{% extends 'layout.html' %}
+{% block content %}
+<form method="POST">
+  <select name="patient_id" class="form-control mb-2" required>
+    {% for p in patients %}
+      <option value="{{ p.id }}">{{ p.to_dict().name }}</option>
+    {% endfor %}
+  </select>
+
+  <h5>Medicines</h5>
+  {% for m in medicines %}
+    {% set mid = m.id %}
+    {% set md = m.to_dict() %}
+    <div class="mb-2">
+      <input type="hidden" name="medicine_id" value="{{ mid }}">
+      <input type="hidden" name="medicine_name" value="{{ md.name }}">
+      <input type="hidden" name="unit_price" value="{{ md.price }}">
+      <strong>{{ md.name }}</strong> ({{ md.price }})
+      <input name="quantity" type="number" value="0" min="0" class="form-control">
+    </div>
+  {% endfor %}
+
+  <input name="total" type="number" step="0.01" placeholder="Total" class="form-control mb-2" required>
+  <button class="btn btn-primary">Create Prescription</button>
+</form>
+{% endblock %}

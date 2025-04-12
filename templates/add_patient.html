@@ -1,0 +1,9 @@
+{% extends 'layout.html' %}
+{% block content %}
+<form method="POST">
+  <input name="name" class="form-control mb-2" placeholder="Name" required>
+  <input name="contact" class="form-control mb-2" placeholder="Contact" required>
+  <input name="medical_history" class="form-control mb-2" placeholder="Medical History">
+  <button class="btn btn-primary">Add Patient</button>
+</form>
+{% endblock %}
