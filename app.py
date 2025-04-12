@@ -49,46 +49,54 @@ def scan_barcode():
         flash("Barcode not found. Please add new medicine.")
     return redirect(url_for('inventory'))
 
-
 @app.route('/inventory/scan-combined', methods=['POST'])
 def scan_combined():
-    from pyzbar.pyzbar import decode
-    from PIL import Image
-
     file = request.files.get('barcode_image')
-    barcode = request.form.get('manual_barcode', '').strip()
+    manual_barcode = request.form.get('manual_barcode', '').strip()
+    barcode = manual_barcode  # fallback by default
 
-    # Try to decode barcode from uploaded image
+    # 1. Try decoding image if uploaded
     if file and file.filename:
         try:
             image = Image.open(file.stream)
             decoded = decode(image)
             if decoded:
                 barcode = decoded[0].data.decode('utf-8')
-                flash(f"Detected barcode from image: {barcode}")
+                flash(f"📸 Detected barcode from image: {barcode}")
             else:
-                flash("No barcode detected in image. Falling back to manual input.")
+                flash("⚠️ No barcode detected in image. Falling back to manual input.")
         except Exception as e:
-            flash(f"Error processing image: {str(e)}")
+            flash(f"❌ Error reading image: {str(e)}")
+            return redirect(url_for('inventory'))
 
+    # 2. Ensure we have a barcode
     if not barcode:
-        flash("No barcode provided.")
+        flash("❌ No barcode provided via image or manual input.")
         return redirect(url_for('inventory'))
 
+    # 3. Get quantity to increase
+    try:
+        increment = int(request.form.get('increase_amount', 1))
+        if increment < 1:
+            raise ValueError
+    except ValueError:
+        flash("❌ Invalid quantity. Please enter a number greater than 0.")
+        return redirect(url_for('inventory'))
+
+    # 4. Find medicine in Firestore
     query = db.collection('medicines').where('barcode', '==', barcode).limit(1).stream()
     med = next(query, None)
 
     if med:
         doc = med.to_dict()
         db.collection('medicines').document(med.id).update({
-            'stock': doc.get('stock', 0) + 1
+            'stock': doc.get('stock', 0) + increment
         })
-        flash(f"✅ Stock updated for {doc['name']} (Barcode: {barcode})")
+        flash(f"✅ Stock updated for {doc['name']} (Barcode: {barcode}) — Added +{increment}")
     else:
         flash(f"❌ Barcode {barcode} not found in database.")
 
     return redirect(url_for('inventory'))
-
 
 # ================= Patients =================
 @app.route('/patients')

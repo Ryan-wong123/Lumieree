@@ -2,29 +2,51 @@
 {% block content %}
 <h4>Inventory</h4>
 
-<!-- Barcode Entry + Live Preview -->
+<!-- Barcode Entry + Quantity Selection -->
 <h5>Lookup / Add by Barcode</h5>
-<form method="POST" action="/inventory/scan-combined" enctype="multipart/form-data" class="row g-2 mb-3 align-items-end">
+<form method="POST" action="/inventory/scan-combined" enctype="multipart/form-data" class="row g-3 mb-4 align-items-end">
+  <!-- Manual Barcode -->
   <div class="col-md-6">
     <label for="manual_barcode" class="form-label">Enter Barcode Manually or Use Scanned</label>
-    <input type="text" name="manual_barcode" id="manual_barcode" class="form-control" placeholder="e.g. 0123456789" >
+    <input type="text" name="manual_barcode" id="manual_barcode" class="form-control" placeholder="e.g. 0123456789">
   </div>
+
+  <!-- Barcode Image Upload -->
   <div class="col-md-6">
     <label for="barcode_image" class="form-label">Upload Barcode Image</label>
     <input type="file" id="barcode_image" name="barcode_image" accept="image/*" capture="environment" class="form-control">
   </div>
 
-  <div class="col-12">
-    <p id="preview-barcode" class="text-info mt-1" style="display: none;">
+  <!-- Quantity Input with Quick Select -->
+  <div class="col-md-6">
+    <label for="increase_amount" class="form-label">Quantity to Increase</label>
+    <div class="input-group">
+      <input type="number" name="increase_amount" id="increase_amount" class="form-control" value="1" min="1" required>
+      <select class="form-select" onchange="document.getElementById('increase_amount').value = this.value;">
+        <option value="">Quick Select</option>
+        <option value="1">+1</option>
+        <option value="5">+5</option>
+        <option value="10">+10</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Live Preview of Scanned Barcode -->
+  <div class="col-md-6">
+    <p id="preview-barcode" class="text-info mt-4 mb-0" style="display: none;">
       <strong>Detected Barcode:</strong> <span id="barcode-value"></span>
     </p>
+  </div>
+
+  <!-- Submit Button -->
+  <div class="col-12">
     <button type="submit" class="btn btn-primary w-100">Submit</button>
   </div>
 </form>
 
 <hr>
 
-<!-- Medicine Table -->
+<!-- Medicine Inventory Table -->
 <a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
 <table class="table">
   <thead>
@@ -45,7 +67,7 @@
   </tbody>
 </table>
 
-<!-- JS Barcode Reader -->
+<!-- Barcode JS Preview (optional and basic) -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   document.getElementById('barcode_image').addEventListener('change', function(event) {
@@ -62,18 +84,16 @@
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0);
 
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-        const codeReader = new ZXing.BrowserBarcodeReader();
-        codeReader.decodeFromImageElement(img).then(result => {
-          const decodedText = result.text;
-          document.getElementById('manual_barcode').value = decodedText;
-          document.getElementById('barcode-value').textContent = decodedText;
-          document.getElementById('preview-barcode').style.display = 'block';
-        }).catch(err => {
-          document.getElementById('preview-barcode').style.display = 'none';
-          console.warn("No barcode found in image.", err);
-        });
+        Html5Qrcode.createBarcodeDecoder().decode(canvas)
+          .then(decodedText => {
+            document.getElementById('manual_barcode').value = decodedText;
+            document.getElementById('barcode-value').textContent = decodedText;
+            document.getElementById('preview-barcode').style.display = 'block';
+          })
+          .catch(err => {
+            document.getElementById('preview-barcode').style.display = 'none';
+            console.warn("No barcode detected in image:", err);
+          });
       };
       img.src = e.target.result;
     };
