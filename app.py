@@ -50,21 +50,31 @@ def scan_barcode():
     return redirect(url_for('inventory'))
 
 
-@app.route('/inventory/scan-image', methods=['POST'])
-def scan_image():
+@app.route('/inventory/scan-combined', methods=['POST'])
+def scan_combined():
+    from pyzbar.pyzbar import decode
+    from PIL import Image
+
     file = request.files.get('barcode_image')
-    if not file:
-        flash("No image uploaded.")
+    barcode = request.form.get('manual_barcode', '').strip()
+
+    # Try to decode barcode from uploaded image
+    if file and file.filename:
+        try:
+            image = Image.open(file.stream)
+            decoded = decode(image)
+            if decoded:
+                barcode = decoded[0].data.decode('utf-8')
+                flash(f"Detected barcode from image: {barcode}")
+            else:
+                flash("No barcode detected in image. Falling back to manual input.")
+        except Exception as e:
+            flash(f"Error processing image: {str(e)}")
+
+    if not barcode:
+        flash("No barcode provided.")
         return redirect(url_for('inventory'))
 
-    image = Image.open(file.stream)
-    decoded = decode(image)
-
-    if not decoded:
-        flash("No barcode detected.")
-        return redirect(url_for('inventory'))
-
-    barcode = decoded[0].data.decode('utf-8')
     query = db.collection('medicines').where('barcode', '==', barcode).limit(1).stream()
     med = next(query, None)
 
@@ -73,11 +83,12 @@ def scan_image():
         db.collection('medicines').document(med.id).update({
             'stock': doc.get('stock', 0) + 1
         })
-        flash(f"Stock updated for {doc['name']} (Barcode: {barcode})")
+        flash(f"✅ Stock updated for {doc['name']} (Barcode: {barcode})")
     else:
-        flash(f"Barcode {barcode} not found in database.")
+        flash(f"❌ Barcode {barcode} not found in database.")
 
     return redirect(url_for('inventory'))
+
 
 # ================= Patients =================
 @app.route('/patients')
