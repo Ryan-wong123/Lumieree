@@ -2,22 +2,29 @@
 {% block content %}
 <h4>Inventory</h4>
 
-<!-- Barcode Entry + Quantity Selection -->
+<!-- 📸 Live Camera Scanner -->
+<div class="mb-3">
+  <button type="button" class="btn btn-outline-primary" onclick="startLiveScanner()">📷 Start Live Scan</button>
+  <button type="button" class="btn btn-outline-secondary" onclick="stopLiveScanner()" id="stop-btn" disabled>🛑 Stop Scan</button>
+</div>
+<div id="live-reader" style="width: 300px; display: none;"></div>
+
+<!-- 🧾 Barcode + Quantity Form -->
 <h5>Lookup / Add by Barcode</h5>
 <form method="POST" action="/inventory/scan-combined" enctype="multipart/form-data" class="row g-3 mb-4 align-items-end">
-  <!-- Manual Barcode -->
+  <!-- Manual Barcode Input -->
   <div class="col-md-6">
     <label for="manual_barcode" class="form-label">Enter Barcode Manually or Use Scanned</label>
     <input type="text" name="manual_barcode" id="manual_barcode" class="form-control" placeholder="e.g. 0123456789">
   </div>
 
-  <!-- Barcode Image Upload -->
+  <!-- Image Upload -->
   <div class="col-md-6">
     <label for="barcode_image" class="form-label">Upload Barcode Image</label>
     <input type="file" id="barcode_image" name="barcode_image" accept="image/*" capture="environment" class="form-control">
   </div>
 
-  <!-- Quantity Input with Quick Select -->
+  <!-- Quantity with Quick Select -->
   <div class="col-md-6">
     <label for="increase_amount" class="form-label">Quantity to Increase</label>
     <div class="input-group">
@@ -31,7 +38,7 @@
     </div>
   </div>
 
-  <!-- Live Preview of Scanned Barcode -->
+  <!-- Preview of Detected Barcode -->
   <div class="col-md-6">
     <p id="preview-barcode" class="text-info mt-4 mb-0" style="display: none;">
       <strong>Detected Barcode:</strong> <span id="barcode-value"></span>
@@ -46,7 +53,7 @@
 
 <hr>
 
-<!-- Medicine Inventory Table -->
+<!-- 📦 Inventory Table -->
 <a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
 <table class="table">
   <thead>
@@ -67,37 +74,46 @@
   </tbody>
 </table>
 
-<!-- Barcode JS Preview (optional and basic) -->
+<!-- 📜 Live Scanner Script -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
-  document.getElementById('barcode_image').addEventListener('change', function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+  const html5QrCode = new Html5Qrcode("live-reader");
+  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+  let cameraRunning = false;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const img = new Image();
-      img.onload = function() {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+  function onScanSuccess(decodedText, decodedResult) {
+    document.getElementById('manual_barcode').value = decodedText;
+    document.getElementById('barcode-value').textContent = decodedText;
+    document.getElementById('preview-barcode').style.display = 'block';
+    stopLiveScanner(); // Optional: stop scanning after one successful read
+  }
 
-        Html5Qrcode.createBarcodeDecoder().decode(canvas)
-          .then(decodedText => {
-            document.getElementById('manual_barcode').value = decodedText;
-            document.getElementById('barcode-value').textContent = decodedText;
-            document.getElementById('preview-barcode').style.display = 'block';
-          })
-          .catch(err => {
-            document.getElementById('preview-barcode').style.display = 'none';
-            console.warn("No barcode detected in image:", err);
-          });
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
+  async function startLiveScanner() {
+    if (cameraRunning) return;
+
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices.length) {
+        document.getElementById("live-reader").style.display = "block";
+        await html5QrCode.start(devices[0].id, config, onScanSuccess);
+        cameraRunning = true;
+        document.getElementById("stop-btn").disabled = false;
+      } else {
+        alert("No camera found.");
+      }
+    } catch (err) {
+      console.error("Error starting scanner:", err);
+    }
+  }
+
+  async function stopLiveScanner() {
+    if (!cameraRunning) return;
+
+    await html5QrCode.stop();
+    html5QrCode.clear();
+    document.getElementById("live-reader").style.display = "none";
+    cameraRunning = false;
+    document.getElementById("stop-btn").disabled = true;
+  }
 </script>
 {% endblock %}
