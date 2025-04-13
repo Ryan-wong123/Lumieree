@@ -283,27 +283,56 @@ def queue_receipt(queue_id):
 # ================= Front Desk View =================
 @app.route('/front_desk')
 def front_desk():
-    queue = db.collection('front_desk_queue')\
-              .order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+    queue = db.collection('front_desk_queue').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
     
-    items = []
+    waiting, prepared, completed = [], [], []
+
     for entry in queue:
         doc = entry.to_dict()
-
-        # ✅ Skip completed items
-        if doc.get('status') == 'completed':
-            continue
-
         patient = db.collection('patients').document(doc['patient_id']).get().to_dict()
-        items.append({
+        item = {
             'id': entry.id,
-            'status': doc['status'],
+            'status': doc.get('status'),
             'patient_name': patient.get('name', 'Unknown'),
-            'items': doc.get('items', [])
-        })
+            'items': doc.get('items', []),
+        }
 
-    return render_template('front_desk.html', queue=items)
+        status = doc.get('status')
+        if status == 'waiting':
+            waiting.append(item)
+        elif status == 'prepared':
+            prepared.append(item)
+        elif status == 'completed':
+            completed.append(item)
 
+    return render_template('front_desk.html', waiting=waiting, prepared=prepared, completed=completed)
+
+@app.route('/admin/queue')
+def admin_queue():
+    query = request.args.get('q', '').strip().lower()
+    queue = db.collection('front_desk_queue').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+
+    results = []
+    for entry in queue:
+        doc = entry.to_dict()
+        patient = db.collection('patients').document(doc['patient_id']).get().to_dict()
+        entry_data = {
+            'id': entry.id,
+            'status': doc.get('status'),
+            'patient_name': patient.get('name', ''),
+            'items': doc.get('items', []),
+            'timestamp': doc.get('timestamp', ''),
+        }
+
+        # Filter based on search query
+        if query:
+            combined = f"{entry_data['patient_name']} {entry_data['status']}".lower()
+            if query in combined:
+                results.append(entry_data)
+        else:
+            results.append(entry_data)
+
+    return render_template('admin_queue.html', queue=results)
 
 
 @app.route('/front_desk/update/<queue_id>/<status>')

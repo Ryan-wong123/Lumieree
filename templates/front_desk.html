@@ -1,19 +1,84 @@
 {% extends 'layout.html' %}
 {% block content %}
+
 <h4>Front Desk Queue</h4>
-{% for item in queue %}
-  <div class="card mb-3">
-    <div class="card-body">
-      <h5>{{ item.patient_name }}</h5>
-      <p>Status: {{ item.status }}</p>
-      <ul>
-        {% for i in item["items"] %}
+
+<!-- Tab Navigation -->
+<ul class="nav nav-tabs mb-3" id="queueTabs" role="tablist">
+  <li class="nav-item">
+    <button class="nav-link active" id="waiting-tab" data-bs-toggle="tab" data-bs-target="#waiting" type="button" role="tab">Waiting</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" id="prepared-tab" data-bs-toggle="tab" data-bs-target="#prepared" type="button" role="tab">Prepared</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button" role="tab">Completed</button>
+  </li>
+</ul>
+
+<!-- Tab Contents -->
+<div class="tab-content">
+
+  <!-- 🟡 Waiting Tab -->
+  <div class="tab-pane fade show active" id="waiting" role="tabpanel">
+    {% for item in waiting %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5>{{ item.patient_name }}</h5>
+        <p>Status: {{ item.status }}</p>
+        <ul>
+          {% for i in item["items"] %}
           <li>{{ i.quantity }}x {{ i.name }}</li>
-        {% endfor %}
-      </ul>
-      <a href="/front_desk/update/{{ item.id }}/prepared" class="btn btn-warning btn-sm">Mark Prepared</a>
-      <a href="/front_desk/update/{{ item.id }}/completed" class="btn btn-success btn-sm">Mark Completed</a>
+          {% endfor %}
+        </ul>
+        <a href="/front_desk/update/{{ item.id }}/prepared" class="btn btn-warning btn-sm">Mark Prepared</a>
+        <a href="/front_desk/update/{{ item.id }}/completed" class="btn btn-success btn-sm">Mark Completed</a>
+      </div>
     </div>
+    {% else %}
+    <p class="text-muted">No waiting items.</p>
+    {% endfor %}
   </div>
-{% endfor %}
+
+  <!-- 🟠 Prepared Tab -->
+  <div class="tab-pane fade" id="prepared" role="tabpanel">
+    {% for item in prepared %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5>{{ item.patient_name }}</h5>
+        <p>Status: {{ item.status }}</p>
+        <ul>
+          {% for i in item["items"] %}
+          <li>{{ i.quantity }}x {{ i.name }}</li>
+          {% endfor %}
+        </ul>
+        <a href="/front_desk/update/{{ item.id }}/completed" class="btn btn-success btn-sm">Mark Completed</a>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-muted">No prepared items.</p>
+    {% endfor %}
+  </div>
+
+  <!-- ✅ Completed Tab -->
+  <div class="tab-pane fade" id="completed" role="tabpanel">
+    {% for item in completed %}
+    <div class="card mb-3 border-success">
+      <div class="card-body">
+        <h5>{{ item.patient_name }}</h5>
+        <p>Status: {{ item.status }}</p>
+        <ul>
+          {% for i in item["items"] %}
+          <li>{{ i.quantity }}x {{ i.name }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-muted">No completed items.</p>
+    {% endfor %}
+  </div>
+
+</div>
+
 {% endblock %}
