@@ -158,13 +158,28 @@ def patient_visits(id):
             'prescribed_meds': request.form.get('prescribed_meds'),
             'created_at': datetime.now().isoformat()
         }
+
+        # Add to visits subcollection
         patient_ref.collection('visits').add(visit)
+
+        # ✅ If meds exist, push to front desk queue
+        meds = request.form.get('prescribed_meds', '').strip()
+        if meds:
+            med_items = [
+                {'name': name.strip(), 'quantity': 1} for name in meds.split(',') if name.strip()
+            ]
+            db.collection('front_desk_queue').add({
+                'patient_id': id,
+                'items': med_items,
+                'status': 'waiting',
+                'timestamp': datetime.now().isoformat()
+            })
+
         flash('Visit record added.')
         return redirect(url_for('patient_visits', id=id))
 
     visits = patient_ref.collection('visits').order_by('date', direction=firestore.Query.DESCENDING).stream()
     return render_template('patient_visits.html', patient=patient, visits=[{**v.to_dict(), 'id': v.id} for v in visits])
-
 
 @app.route('/patients/delete/<id>', methods=['POST'])
 def delete_patient(id):
@@ -235,15 +250,15 @@ def front_desk():
     items = []
     for entry in queue:
         doc = entry.to_dict()
-        prescription = db.collection('prescriptions').document(doc['prescription_id']).get().to_dict()
-        patient = db.collection('patients').document(prescription['patient_id']).get().to_dict()
+        patient = db.collection('patients').document(doc['patient_id']).get().to_dict()
         items.append({
             'id': entry.id,
             'status': doc['status'],
             'patient_name': patient['name'],
-            'items': prescription['items'],
+            'items': doc.get('items', []),
         })
     return render_template('front_desk.html', queue=items)
+
 
 @app.route('/front_desk/update/<queue_id>/<status>')
 def update_queue_status(queue_id, status):

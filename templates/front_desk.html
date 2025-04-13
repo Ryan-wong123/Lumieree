@@ -7,7 +7,7 @@
       <h5>{{ item.patient_name }}</h5>
       <p>Status: {{ item.status }}</p>
       <ul>
-        {% for i in item.items %}
+        {% for i in item["items"] %}
           <li>{{ i.quantity }}x {{ i.name }}</li>
         {% endfor %}
       </ul>
