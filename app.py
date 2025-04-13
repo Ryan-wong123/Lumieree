@@ -104,7 +104,11 @@ def patients():
         data['visit_count'] = sum(1 for _ in visits)
 
         if query:
-            if query in data.get('name', '').lower() or query in data.get('contact', '').lower():
+            if (
+                query in data.get('name', '').lower() or
+                query in data.get('contact', '').lower() or
+                query in data.get('nric', '').lower()
+            ):
                 patients.append(data)
         else:
             patients.append(data)
@@ -112,16 +116,18 @@ def patients():
     return render_template('patients.html', patients=patients)
 
 
+
 @app.route('/patients/add', methods=['GET', 'POST'])
 def add_patient():
     if request.method == 'POST':
         data = request.form.to_dict()
-        data['created_at'] = datetime.datetime.now().isoformat()
-        data['last_visit'] = datetime.datetime.now().isoformat()
+        data['created_at'] = datetime.now().isoformat()
+        data['last_visit'] = datetime.now().isoformat()
         db.collection('patients').add(data)
         flash('Patient added!')
         return redirect(url_for('patients'))
     return render_template('add_patient.html')
+
 
 @app.route('/patients/edit/<id>', methods=['GET', 'POST'])
 def edit_patient(id):
@@ -129,7 +135,7 @@ def edit_patient(id):
 
     if request.method == 'POST':
         data = request.form.to_dict()
-        data['updated_at'] = datetime.datetime.now().isoformat()
+        data['updated_at'] = datetime.now().isoformat()
         patient_ref.update(data)
         flash('Patient updated successfully!')
         return redirect(url_for('patients'))
@@ -153,15 +159,33 @@ def patient_visits(id):
             'created_at': datetime.now().isoformat()
         }
         patient_ref.collection('visits').add(visit)
-        flash('Visit added successfully.')
+        flash('Visit record added.')
         return redirect(url_for('patient_visits', id=id))
 
     visits = patient_ref.collection('visits').order_by('date', direction=firestore.Query.DESCENDING).stream()
     return render_template('patient_visits.html', patient=patient, visits=[{**v.to_dict(), 'id': v.id} for v in visits])
 
+
+@app.route('/patients/delete/<id>', methods=['POST'])
+def delete_patient(id):
+    patient_ref = db.collection('patients').document(id)
+
+    # Delete all visit subcollection documents
+    visits = patient_ref.collection('visits').stream()
+    for v in visits:
+        v.reference.delete()
+
+    # Delete the patient document
+    patient_ref.delete()
+
+    flash('✅ Patient and all their visit records deleted.')
+    return redirect(url_for('patients'))
+
+
 @app.context_processor
 def inject_now():
     return { 'now': datetime.now }
+
 
 # ================= Prescriptions =================
 @app.route('/prescriptions/create', methods=['GET', 'POST'])

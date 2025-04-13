@@ -1,6 +1,8 @@
 {% extends 'layout.html' %}
 {% block content %}
 <h4>Edit Patient</h4>
+
+<!-- 🔄 Save Form -->
 <form method="POST">
   <!-- Personal Info -->
   <input name="name" class="form-control mb-2" placeholder="Full Name" value="{{ patient.name }}" required>
@@ -16,8 +18,10 @@
   <input name="address" class="form-control mb-2" value="{{ patient.address }}">
 
   <!-- Emergency -->
-  <input name="emergency_contact_name" class="form-control mb-2" placeholder="Emergency Contact" value="{{ patient.emergency_contact_name }}">
-  <input name="emergency_contact_number" class="form-control mb-2" placeholder="Emergency Number" value="{{ patient.emergency_contact_number }}">
+  <input name="emergency_contact_name" class="form-control mb-2" placeholder="Emergency Contact"
+    value="{{ patient.emergency_contact_name }}">
+  <input name="emergency_contact_number" class="form-control mb-2" placeholder="Emergency Number"
+    value="{{ patient.emergency_contact_number }}">
 
   <!-- Medical -->
   <input name="blood_type" class="form-control mb-2" value="{{ patient.blood_type }}">
@@ -25,6 +29,16 @@
   <input name="current_medication" class="form-control mb-2" value="{{ patient.current_medication }}">
   <textarea name="medical_history" class="form-control mb-3">{{ patient.medical_history }}</textarea>
 
-  <button class="btn btn-primary">Save Changes</button>
+  <!-- Save Button -->
+  <div class="d-flex justify-content-between">
+    <button type="submit" class="btn btn-primary">Save Changes</button>
+  </div>
 </form>
+
+<!-- ❌ Separate Delete Form -->
+<form action="{{ url_for('delete_patient', id=patient.id) }}" method="POST"
+      onsubmit="return confirm('Are you sure you want to delete this patient and all their visit records?')" class="mt-3">
+  <button type="submit" class="btn btn-outline-danger w-100">Delete Patient</button>
+</form>
+
 {% endblock %}
