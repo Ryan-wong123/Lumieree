@@ -19,8 +19,21 @@ db = firestore.client()
 # ================= Inventory =================
 @app.route('/inventory')
 def inventory():
-    medicines = db.collection('medicines').stream()
-    return render_template('inventory.html', medicines=[{**m.to_dict(), 'id': m.id} for m in medicines])
+    query = request.args.get('q', '').strip().lower()
+    medicines_ref = db.collection('medicines')
+    all_docs = medicines_ref.stream()
+
+    medicines = []
+    for doc in all_docs:
+        data = doc.to_dict()
+        # If searching, filter by name or barcode (case-insensitive)
+        if query:
+            if query in data.get('name', '').lower() or query in data.get('barcode', '').lower():
+                medicines.append(data)
+        else:
+            medicines.append(data)
+
+    return render_template('inventory.html', medicines=medicines)
 
 @app.route('/inventory/add', methods=['GET', 'POST'])
 def add_medicine():

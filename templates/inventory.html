@@ -1,111 +1,158 @@
 {% extends 'layout.html' %}
 {% block content %}
 
-<h4>Inventory</h4>
+<h4>Add/Minus Medicine<h4>
 
-<form method="POST" action="/inventory/scan-combined" enctype="multipart/form-data" class="row g-3 mb-4 align-items-end">
-  <!-- Barcode Input with Scan Button -->
-  <div class="col-md-6">
-    <label for="manual_barcode" class="form-label">Barcode</label>
+  <!-- 📷 Shared Scanner Preview -->
+  <div id="live-reader" style="width: 100%; max-width: 300px; display: none;" class="mt-3 mb-4"></div>
+
+
+  <!-- 🧾 Barcode + Quantity Form -->
+  <form method="POST" action="/inventory/scan-combined" enctype="multipart/form-data"
+    class="row g-3 mb-4 align-items-end">
+    <!-- Manual Barcode Input with Scanner -->
+    <div class="col-md-6">
+      <label for="manual_barcode" class="form-label">Barcode</label>
+      <div class="input-group">
+        <input type="text" name="manual_barcode" id="manual_barcode" class="form-control" placeholder="e.g. 0123456789">
+        <button type="button" class="btn btn-outline-primary" onclick="startLiveScanner('manual_barcode')">
+          <i class="bi bi-camera"></i> Scan
+        </button>
+      </div>
+    </div>
+
+    <!-- Quantity Adjuster -->
+    <div class="col-md-6">
+      <label class="form-label">Adjust Stock</label>
+      <div class="input-group">
+        <select name="adjust_type" class="form-select" style="max-width: 120px;">
+          <option value="increase">+ Increase</option>
+          <option value="decrease">− Decrease</option>
+        </select>
+        <input type="number" name="adjust_amount" id="adjust_amount" class="form-control" value="1" min="1" required>
+      </div>
+    </div>
+
+    <!-- Detected Barcode Preview -->
+    <div class="col-md-6">
+      <p id="preview-barcode" class="text-info mt-4 mb-0" style="display: none;">
+        <strong>Detected Barcode:</strong> <span id="barcode-value"></span>
+      </p>
+    </div>
+
+    <!-- Submit Button -->
+    <div class="col-12">
+      <button type="submit" class="btn btn-primary w-100">Submit</button>
+    </div>
+  </form>
+
+
+  <hr>
+
+  <!-- 🔍 Search Bar with Scan Button -->
+  <form method="GET" action="/inventory" id="search-form" class="mb-4">
     <div class="input-group">
-      <input type="text" name="manual_barcode" id="manual_barcode" class="form-control" placeholder="e.g. 0123456789">
-      <button type="button" class="btn btn-outline-primary" onclick="startLiveScanner()">
+      <input type="text" name="q" id="search-barcode" class="form-control" placeholder="Search by name or barcode..."
+        value="{{ request.args.get('q', '') }}">
+      <button type="button" class="btn btn-outline-primary" onclick="startLiveScanner('search-barcode', 'search-form')">
         <i class="bi bi-camera"></i> Scan
       </button>
     </div>
-  </div>
+  </form>
+  
+  <!-- 📦 Inventory Table -->
+  <a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Price</th>
+        <th>Stock</th>
+        <th>Expiry</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in medicines %}
+      <tr>
+        <td>{{ m.name }}</td>
+        <td>{{ m.type }}</td>
+        <td>{{ m.price }}</td>
+        <td>{{ m.stock }}</td>
+        <td>{{ m.expiry_date }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="text-center">No results found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
-  <!-- Quantity Adjust (Increase/Decrease) -->
-  <div class="col-md-6">
-    <label class="form-label">Adjust Stock</label>
-    <div class="input-group">
-      <select name="adjust_type" class="form-select" style="max-width: 120px;">
-        <option value="increase">+</option>
-        <option value="decrease">−</option>
-      </select>
-      <input type="number" name="adjust_amount" id="adjust_amount" class="form-control" value="1" min="1" required>
-    </div>
-  </div>
-
-  <!-- Preview -->
-  <div class="col-md-6">
-    <p id="preview-barcode" class="text-info mt-4 mb-0" style="display: none;">
-      <strong>Detected Barcode:</strong> <span id="barcode-value"></span>
-    </p>
-  </div>
-
-  <!-- Submit -->
-  <div class="col-12">
-    <button type="submit" class="btn btn-primary w-100">Submit</button>
-  </div>
-</form>
-
-<!-- Scanner Preview -->
-<div id="live-reader" style="width: 100%; max-width: 300px; display: none;" class="mt-3"></div>
-
-<hr>
-
-<!-- Inventory Table -->
-<a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th><th>Type</th><th>Price</th><th>Stock</th><th>Expiry</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for m in medicines %}
-    <tr>
-      <td>{{ m.name }}</td>
-      <td>{{ m.type }}</td>
-      <td>{{ m.price }}</td>
-      <td>{{ m.stock }}</td>
-      <td>{{ m.expiry_date }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-<!-- Scripts -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script>
-  const html5QrCode = new Html5Qrcode("live-reader");
-  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-  let cameraRunning = false;
-
-  async function startLiveScanner() {
-    if (cameraRunning) return;
-    try {
-      const devices = await Html5Qrcode.getCameras();
-      if (devices.length) {
-        document.getElementById("live-reader").style.display = "block";
-        await html5QrCode.start(devices[0].id, config, onScanSuccess);
-        cameraRunning = true;
-      } else {
-        alert("No camera found.");
+  <!-- 🔁 Reusable Scanner Script -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    const html5QrCode = new Html5Qrcode("live-reader");
+    const config = {
+      fps: 10,
+      qrbox: {
+        width: 250,
+        height: 250
       }
-    } catch (err) {
-      console.error("Error starting scanner:", err);
+    };
+    let cameraRunning = false;
+    let targetInputId = null;
+    let autoSubmitFormId = null;
+
+    async function startLiveScanner(inputId, formId = null) {
+      if (cameraRunning) return;
+      targetInputId = inputId;
+      autoSubmitFormId = formId;
+
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices.length) {
+          document.getElementById("live-reader").style.display = "block";
+          await html5QrCode.start(devices[0].id, config, onScanSuccess);
+          cameraRunning = true;
+        } else {
+          alert("No camera found.");
+        }
+      } catch (err) {
+        console.error("Scanner start failed:", err);
+      }
     }
-  }
 
-  async function stopLiveScanner() {
-    if (!cameraRunning) return;
-    await html5QrCode.stop();
-    html5QrCode.clear();
-    document.getElementById("live-reader").style.display = "none";
-    cameraRunning = false;
-  }
+    async function stopLiveScanner() {
+      if (!cameraRunning) return;
+      await html5QrCode.stop();
+      html5QrCode.clear();
+      document.getElementById("live-reader").style.display = "none";
+      cameraRunning = false;
+      targetInputId = null;
+      autoSubmitFormId = null;
+    }
 
-  function onScanSuccess(decodedText, decodedResult) {
-    document.getElementById('manual_barcode').value = decodedText;
-    document.getElementById('barcode-value').textContent = decodedText;
-    document.getElementById('preview-barcode').style.display = 'block';
-    stopLiveScanner();
-  }
-</script>
+    function onScanSuccess(decodedText, decodedResult) {
+      if (targetInputId) {
+        const input = document.getElementById(targetInputId);
+        if (input) input.value = decodedText;
+      }
 
-<!-- Bootstrap Icons (if needed) -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+      if (targetInputId === 'manual_barcode') {
+        document.getElementById('barcode-value').textContent = decodedText;
+        document.getElementById('preview-barcode').style.display = 'block';
+      }
 
-{% endblock %}
+      stopLiveScanner();
+
+      if (autoSubmitFormId) {
+        document.getElementById(autoSubmitFormId).submit();
+      }
+    }
+  </script>
+
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+
+  {% endblock %}
