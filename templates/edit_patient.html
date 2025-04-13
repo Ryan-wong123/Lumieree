@@ -1,0 +1,10 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h4>Edit Patient</h4>
+<form method="POST">
+  <input name="name" class="form-control mb-2" placeholder="Name" value="{{ patient.name }}" required>
+  <input name="contact" class="form-control mb-2" placeholder="Contact" value="{{ patient.contact }}" required>
+  <input name="medical_history" class="form-control mb-2" placeholder="Medical History" value="{{ patient.medical_history }}">
+  <button class="btn btn-primary">Save Changes</button>
+</form>
+{% endblock %}

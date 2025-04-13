@@ -1,11 +1,34 @@
 {% extends 'layout.html' %}
 {% block content %}
+
+<!-- 🔍 Search Bar -->
+<form method="GET" class="mb-3">
+  <div class="input-group">
+    <input type="text" class="form-control" name="q" placeholder="Search by name or contact..." value="{{ request.args.get('q', '') }}">
+    <button class="btn btn-outline-secondary" type="submit">Search</button>
+  </div>
+</form>
+
 <a href="/patients/add" class="btn btn-success mb-3">Add Patient</a>
-<table class="table">
-  <thead><tr><th>Name</th><th>Contact</th><th>History</th></tr></thead>
+
+<table class="table table-hover align-middle">
+  <thead class="table-light">
+    <tr><th>Name</th><th>Contact</th><th>History</th><th>Action</th></tr>
+  </thead>
   <tbody>
     {% for p in patients %}
-    <tr><td>{{ p.name }}</td><td>{{ p.contact }}</td><td>{{ p.medical_history }}</td></tr>
+    <tr>
+      <td>{{ p.name }}</td>
+      <td>{{ p.contact }}</td>
+      <td>{{ p.medical_history }}</td>
+      <td>
+        <a href="/patients/edit/{{ p.id }}" class="btn btn-sm btn-outline-primary">Edit</a>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="4" class="text-center text-muted">No patients found.</td>
+    </tr>
     {% endfor %}
   </tbody>
 </table>

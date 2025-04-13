@@ -93,8 +93,20 @@ def scan_combined():
 # ================= Patients =================
 @app.route('/patients')
 def patients():
+    query = request.args.get('q', '').strip().lower()
     patient_list = db.collection('patients').stream()
-    return render_template('patients.html', patients=[{**p.to_dict(), 'id': p.id} for p in patient_list])
+    patients = []
+
+    for p in patient_list:
+        data = p.to_dict()
+        data['id'] = p.id
+        if query:
+            if query in data.get('name', '').lower() or query in data.get('contact', '').lower():
+                patients.append(data)
+        else:
+            patients.append(data)
+
+    return render_template('patients.html', patients=patients)
 
 @app.route('/patients/add', methods=['GET', 'POST'])
 def add_patient():
@@ -105,6 +117,20 @@ def add_patient():
         flash('Patient added!')
         return redirect(url_for('patients'))
     return render_template('add_patient.html')
+
+@app.route('/patients/edit/<id>', methods=['GET', 'POST'])
+def edit_patient(id):
+    patient_ref = db.collection('patients').document(id)
+
+    if request.method == 'POST':
+        data = request.form.to_dict()
+        patient_ref.update(data)
+        flash('Patient updated successfully!')
+        return redirect(url_for('patients'))
+
+    patient = patient_ref.get().to_dict()
+    patient['id'] = id
+    return render_template('edit_patient.html', patient=patient)
 
 # ================= Prescriptions =================
 @app.route('/prescriptions/create', methods=['GET', 'POST'])
