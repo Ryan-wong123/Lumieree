@@ -1,29 +1,50 @@
 {% extends 'layout.html' %}
 {% block content %}
+
 <h4>Visit Records for {{ patient.name }}</h4>
 
-<form method="POST" class="row g-3 mb-4">
-  <div class="col-md-4">
-    <label class="form-label">Visit Date</label>
-    <input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}">
-  </div>
-  <div class="col-md-8">
-    <label class="form-label">Condition</label>
-    <input name="condition" class="form-control" required>
-  </div>
-  <div class="col-md-6">
-    <label class="form-label">Prescribed Medications</label>
-    <input name="prescribed_meds" class="form-control" placeholder="e.g. Panadol, Ginseng">
-  </div>
-  <div class="col-md-6">
-    <label class="form-label">Notes</label>
-    <textarea name="notes" class="form-control" placeholder="Treatment notes..."></textarea>
-  </div>
-  <div class="col-md-12">
-    <button class="btn btn-primary w-100">Add Visit</button>
-  </div>
-</form>
+<!-- ➕ Add Visit Button triggers modal -->
+<button class="btn btn-primary mb-4" data-bs-toggle="modal" data-bs-target="#visitModal">
+  + Add Visit
+</button>
 
+<!-- 📋 Visit Modal -->
+<div class="modal fade" id="visitModal" tabindex="-1" aria-labelledby="visitModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title" id="visitModalLabel">Add New Visit</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Visit Date</label>
+            <input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}">
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Condition</label>
+            <input name="condition" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Prescribed Medications</label>
+            <input name="prescribed_meds" class="form-control" placeholder="e.g. Panadol, Ginseng">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" placeholder="Treatment notes..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary" type="submit">Add Visit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 📅 Past Visits -->
 <h5>Past Visits</h5>
 <table class="table table-striped">
   <thead class="table-light">
@@ -42,4 +63,8 @@
     {% endfor %}
   </tbody>
 </table>
+
+<!-- 🧩 Bootstrap Modal Support -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 {% endblock %}
