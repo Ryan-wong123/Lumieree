@@ -1,9 +1,30 @@
 {% extends 'layout.html' %}
 {% block content %}
+<h4>Add Patient</h4>
 <form method="POST">
-  <input name="name" class="form-control mb-2" placeholder="Name" required>
-  <input name="contact" class="form-control mb-2" placeholder="Contact" required>
-  <input name="medical_history" class="form-control mb-2" placeholder="Medical History">
+  <!-- Personal Info -->
+  <input name="name" class="form-control mb-2" placeholder="Full Name" required>
+  <input name="nric" class="form-control mb-2" placeholder="NRIC / ID Number" required>
+  <input name="dob" type="date" class="form-control mb-2" placeholder="Date of Birth" required>
+  <select name="gender" class="form-select mb-2">
+    <option value="">Select Gender</option>
+    <option>Male</option>
+    <option>Female</option>
+  </select>
+  <input name="contact" class="form-control mb-2" placeholder="Contact Number">
+  <input name="email" class="form-control mb-2" placeholder="Email">
+  <input name="address" class="form-control mb-2" placeholder="Address">
+
+  <!-- Emergency Contact -->
+  <input name="emergency_contact_name" class="form-control mb-2" placeholder="Emergency Contact Name">
+  <input name="emergency_contact_number" class="form-control mb-2" placeholder="Emergency Contact Number">
+
+  <!-- Medical Info -->
+  <input name="blood_type" class="form-control mb-2" placeholder="Blood Type (optional)">
+  <input name="allergies" class="form-control mb-2" placeholder="Allergies (comma-separated)">
+  <input name="current_medication" class="form-control mb-2" placeholder="Current Medication (comma-separated)">
+  <textarea name="medical_history" class="form-control mb-3" placeholder="Medical History"></textarea>
+
   <button class="btn btn-primary">Add Patient</button>
 </form>
 {% endblock %}

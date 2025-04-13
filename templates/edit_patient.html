@@ -2,9 +2,29 @@
 {% block content %}
 <h4>Edit Patient</h4>
 <form method="POST">
-  <input name="name" class="form-control mb-2" placeholder="Name" value="{{ patient.name }}" required>
-  <input name="contact" class="form-control mb-2" placeholder="Contact" value="{{ patient.contact }}" required>
-  <input name="medical_history" class="form-control mb-2" placeholder="Medical History" value="{{ patient.medical_history }}">
+  <!-- Personal Info -->
+  <input name="name" class="form-control mb-2" placeholder="Full Name" value="{{ patient.name }}" required>
+  <input name="nric" class="form-control mb-2" placeholder="NRIC / ID" value="{{ patient.nric }}" required>
+  <input name="dob" type="date" class="form-control mb-2" value="{{ patient.dob }}">
+  <select name="gender" class="form-select mb-2">
+    <option value="">Select Gender</option>
+    <option {% if patient.gender == 'Male' %}selected{% endif %}>Male</option>
+    <option {% if patient.gender == 'Female' %}selected{% endif %}>Female</option>
+  </select>
+  <input name="contact" class="form-control mb-2" placeholder="Contact" value="{{ patient.contact }}">
+  <input name="email" class="form-control mb-2" value="{{ patient.email }}">
+  <input name="address" class="form-control mb-2" value="{{ patient.address }}">
+
+  <!-- Emergency -->
+  <input name="emergency_contact_name" class="form-control mb-2" placeholder="Emergency Contact" value="{{ patient.emergency_contact_name }}">
+  <input name="emergency_contact_number" class="form-control mb-2" placeholder="Emergency Number" value="{{ patient.emergency_contact_number }}">
+
+  <!-- Medical -->
+  <input name="blood_type" class="form-control mb-2" value="{{ patient.blood_type }}">
+  <input name="allergies" class="form-control mb-2" value="{{ patient.allergies }}">
+  <input name="current_medication" class="form-control mb-2" value="{{ patient.current_medication }}">
+  <textarea name="medical_history" class="form-control mb-3">{{ patient.medical_history }}</textarea>
+
   <button class="btn btn-primary">Save Changes</button>
 </form>
 {% endblock %}

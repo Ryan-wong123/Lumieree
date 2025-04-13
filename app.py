@@ -112,6 +112,7 @@ def patients():
 def add_patient():
     if request.method == 'POST':
         data = request.form.to_dict()
+        data['created_at'] = datetime.datetime.now().isoformat()
         data['last_visit'] = datetime.datetime.now().isoformat()
         db.collection('patients').add(data)
         flash('Patient added!')
@@ -124,6 +125,7 @@ def edit_patient(id):
 
     if request.method == 'POST':
         data = request.form.to_dict()
+        data['updated_at'] = datetime.datetime.now().isoformat()
         patient_ref.update(data)
         flash('Patient updated successfully!')
         return redirect(url_for('patients'))
@@ -131,6 +133,7 @@ def edit_patient(id):
     patient = patient_ref.get().to_dict()
     patient['id'] = id
     return render_template('edit_patient.html', patient=patient)
+
 
 # ================= Prescriptions =================
 @app.route('/prescriptions/create', methods=['GET', 'POST'])
