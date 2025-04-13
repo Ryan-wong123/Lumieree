@@ -242,27 +242,81 @@ def receipt(prescription_id):
     data = presc_doc.to_dict()
     patient = db.collection('patients').document(data['patient_id']).get().to_dict()
     return render_template('receipt.html', patient=patient, items=data['items'], total=data['total'])
+@app.route('/receipt/queue/<queue_id>')
+def queue_receipt(queue_id):
+    queue_ref = db.collection('front_desk_queue').document(queue_id)
+    queue_data = queue_ref.get().to_dict()
+
+    # ✅ 1. Update status
+    queue_ref.update({'status': 'completed'})
+
+    # ✅ 3. Build receipt
+    patient = db.collection('patients').document(queue_data['patient_id']).get().to_dict()
+    items = []
+    total = 0.0
+
+    for i in queue_data.get('items', []):
+        med_query = db.collection('medicines').where('name', '==', i['name']).limit(1).stream()
+        med = next(med_query, None)
+        if med:
+            med_data = med.to_dict()
+            subtotal = float(med_data['price']) * int(i['quantity'])
+            total += subtotal
+            items.append({
+                'name': med_data['name'],
+                'unit_price': med_data['price'],
+                'quantity': i['quantity'],
+                'subtotal': subtotal
+            })
+        else:
+            items.append({
+                'name': i['name'],
+                'unit_price': 0.0,
+                'quantity': i['quantity'],
+                'subtotal': 0.0
+            })
+
+    return render_template('reciepts.html', patient=patient, items=items, total=round(total, 2))
+
+
 
 # ================= Front Desk View =================
 @app.route('/front_desk')
 def front_desk():
-    queue = db.collection('front_desk_queue').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+    queue = db.collection('front_desk_queue')\
+              .order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+    
     items = []
     for entry in queue:
         doc = entry.to_dict()
+
+        # ✅ Skip completed items
+        if doc.get('status') == 'completed':
+            continue
+
         patient = db.collection('patients').document(doc['patient_id']).get().to_dict()
         items.append({
             'id': entry.id,
             'status': doc['status'],
-            'patient_name': patient['name'],
-            'items': doc.get('items', []),
+            'patient_name': patient.get('name', 'Unknown'),
+            'items': doc.get('items', [])
         })
+
     return render_template('front_desk.html', queue=items)
+
 
 
 @app.route('/front_desk/update/<queue_id>/<status>')
 def update_queue_status(queue_id, status):
-    db.collection('front_desk_queue').document(queue_id).update({ 'status': status })
+    queue_ref = db.collection('front_desk_queue').document(queue_id)
+    queue_doc = queue_ref.get().to_dict()
+
+    if status == 'completed':
+        # ✅ Redirect to receipt generation
+        return redirect(url_for('queue_receipt', queue_id=queue_id))
+
+    # 🟡 Just update status if not completed
+    queue_ref.update({'status': status})
     return redirect(url_for('front_desk'))
 
 # ================= Run =================
