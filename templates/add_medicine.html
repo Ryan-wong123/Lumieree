@@ -4,7 +4,17 @@
 <h4>Add Medicine</h4>
 
 <!-- 🔍 Live Scanner Preview -->
-<div id="live-reader" style="width: 100%; max-width: 300px; margin-bottom: 1rem; display: none;"></div>
+<div class="d-flex justify-content-center">
+  <div class="text-center">
+    <p id="scan-instruction" class="text-muted small mb-2" style="display: none;">
+      Point your camera at a barcode
+    </p>
+    <div id="live-reader" class="rounded shadow border"
+      style="width: 100%; max-width: 360px; aspect-ratio: 1; display: none;">
+    </div>
+  </div>
+</div>
+
 
 <!-- 👁️ Preview of Detected Barcode -->
 <p id="preview-barcode" class="text-info mb-3" style="display: none;">
@@ -15,10 +25,12 @@
 <form method="POST">
   <input name="name" class="form-control mb-2" placeholder="Name" required>
 
-  <!-- Barcode Input with Scanner Button -->
+  <!-- Barcode Input + Toggleable Scan Button -->
   <div class="input-group mb-2">
     <input name="barcode" id="barcode_input" class="form-control" placeholder="Barcode" required>
-    <button type="button" class="btn btn-outline-primary" onclick="startLiveScanner()">📷 Scan</button>
+    <button type="button" id="barcode-scan-btn" class="btn btn-outline-primary" onclick="toggleLiveScanner(this)">
+      <i class="bi bi-camera"></i> Scan
+    </button>
   </div>
 
   <input name="type" class="form-control mb-2" placeholder="Type" required>
@@ -29,21 +41,34 @@
   <button class="btn btn-primary">Add Medicine</button>
 </form>
 
-
 <!-- 📜 Scanner Script -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   const html5QrCode = new Html5Qrcode("live-reader");
-  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+  const config = {
+    fps: 10,
+    qrbox: {
+      width: 250,
+      height: 250
+    }
+  };
   let cameraRunning = false;
+  let activeScanButton = null;
 
-  async function startLiveScanner() {
-    if (cameraRunning) return;
+  async function toggleLiveScanner(buttonElement) {
+    if (cameraRunning) {
+      stopLiveScanner();
+      return;
+    }
+
+    activeScanButton = buttonElement;
 
     try {
       const devices = await Html5Qrcode.getCameras();
       if (devices.length) {
         document.getElementById("live-reader").style.display = "block";
+        document.getElementById("scan-instruction").style.display = "block";
+        updateScanButton(true);
         await html5QrCode.start(devices[0].id, config, onScanSuccess);
         cameraRunning = true;
       } else {
@@ -51,6 +76,7 @@
       }
     } catch (err) {
       console.error("Error starting scanner:", err);
+      updateScanButton(false);
     }
   }
 
@@ -58,17 +84,36 @@
     if (!cameraRunning) return;
     await html5QrCode.stop();
     html5QrCode.clear();
-    document.getElementById("live-reader").style.display = "none";
     cameraRunning = false;
+    document.getElementById("live-reader").style.display = "none";
+    document.getElementById("scan-instruction").style.display = "none";
+    updateScanButton(false);
+    activeScanButton = null;
+  }
+
+  function updateScanButton(scanning) {
+    if (!activeScanButton) return;
+
+    if (scanning) {
+      activeScanButton.innerHTML = '<i class="bi bi-stop-circle"></i> Stop Scanning';
+      activeScanButton.classList.remove("btn-outline-primary");
+      activeScanButton.classList.add("btn-outline-danger");
+    } else {
+      activeScanButton.innerHTML = '<i class="bi bi-camera"></i> Scan';
+      activeScanButton.classList.remove("btn-outline-danger");
+      activeScanButton.classList.add("btn-outline-primary");
+    }
   }
 
   function onScanSuccess(decodedText, decodedResult) {
     document.getElementById('barcode_input').value = decodedText;
     document.getElementById('barcode-value').textContent = decodedText;
     document.getElementById('preview-barcode').style.display = 'block';
-
-    stopLiveScanner(); // Automatically stop after scan
+    stopLiveScanner();
   }
 </script>
+
+<!-- Bootstrap Icons -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 
 {% endblock %}
