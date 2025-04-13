@@ -1,16 +1,13 @@
 {% extends 'layout.html' %}
 {% block content %}
-<h4>Inventory</h4>
 
 <!-- 📸 Live Camera Scanner -->
 <div class="mb-3">
   <button type="button" class="btn btn-outline-primary" onclick="startLiveScanner()">📷 Start Live Scan</button>
-  <button type="button" class="btn btn-outline-secondary" onclick="stopLiveScanner()" id="stop-btn" disabled>🛑 Stop Scan</button>
 </div>
 <div id="live-reader" style="width: 300px; display: none;"></div>
 
 <!-- 🧾 Barcode + Quantity Form -->
-<h5>Lookup / Add by Barcode</h5>
 <form method="POST" action="/inventory/scan-combined" enctype="multipart/form-data" class="row g-3 mb-4 align-items-end">
   <!-- Manual Barcode Input -->
   <div class="col-md-6">
@@ -18,25 +15,12 @@
     <input type="text" name="manual_barcode" id="manual_barcode" class="form-control" placeholder="e.g. 0123456789">
   </div>
 
-  <!-- Image Upload -->
-  <div class="col-md-6">
-    <label for="barcode_image" class="form-label">Upload Barcode Image</label>
-    <input type="file" id="barcode_image" name="barcode_image" accept="image/*" capture="environment" class="form-control">
-  </div>
-
   <!-- Quantity with Quick Select -->
   <div class="col-md-6">
     <label for="increase_amount" class="form-label">Quantity to Increase</label>
-    <div class="input-group">
-      <input type="number" name="increase_amount" id="increase_amount" class="form-control" value="1" min="1" required>
-      <select class="form-select" onchange="document.getElementById('increase_amount').value = this.value;">
-        <option value="">Quick Select</option>
-        <option value="1">+1</option>
-        <option value="5">+5</option>
-        <option value="10">+10</option>
-      </select>
-    </div>
+    <input type="number" name="increase_amount" id="increase_amount" class="form-control" value="1" min="1" required>
   </div>
+  
 
   <!-- Preview of Detected Barcode -->
   <div class="col-md-6">
