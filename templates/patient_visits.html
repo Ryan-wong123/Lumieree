@@ -1,0 +1,45 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h4>Visit Records for {{ patient.name }}</h4>
+
+<form method="POST" class="row g-3 mb-4">
+  <div class="col-md-4">
+    <label class="form-label">Visit Date</label>
+    <input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}">
+  </div>
+  <div class="col-md-8">
+    <label class="form-label">Condition</label>
+    <input name="condition" class="form-control" required>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Prescribed Medications</label>
+    <input name="prescribed_meds" class="form-control" placeholder="e.g. Panadol, Ginseng">
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Notes</label>
+    <textarea name="notes" class="form-control" placeholder="Treatment notes..."></textarea>
+  </div>
+  <div class="col-md-12">
+    <button class="btn btn-primary w-100">Add Visit</button>
+  </div>
+</form>
+
+<h5>Past Visits</h5>
+<table class="table table-striped">
+  <thead class="table-light">
+    <tr><th>Date</th><th>Condition</th><th>Medication</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    {% for v in visits %}
+    <tr>
+      <td>{{ v.date }}</td>
+      <td>{{ v.condition }}</td>
+      <td>{{ v.prescribed_meds }}</td>
+      <td>{{ v.notes }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="text-center text-muted">No visit history yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

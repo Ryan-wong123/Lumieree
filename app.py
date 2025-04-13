@@ -3,7 +3,7 @@
 
 from flask import Flask, render_template, request, redirect, url_for, flash
 from firebase_admin import credentials, firestore, initialize_app
-import datetime
+from datetime import datetime
 from pyzbar.pyzbar import decode
 from PIL import Image
 import io
@@ -100,6 +100,9 @@ def patients():
     for p in patient_list:
         data = p.to_dict()
         data['id'] = p.id
+        visits = db.collection('patients').document(p.id).collection('visits').stream()
+        data['visit_count'] = sum(1 for _ in visits)
+
         if query:
             if query in data.get('name', '').lower() or query in data.get('contact', '').lower():
                 patients.append(data)
@@ -107,6 +110,7 @@ def patients():
             patients.append(data)
 
     return render_template('patients.html', patients=patients)
+
 
 @app.route('/patients/add', methods=['GET', 'POST'])
 def add_patient():
@@ -134,6 +138,30 @@ def edit_patient(id):
     patient['id'] = id
     return render_template('edit_patient.html', patient=patient)
 
+@app.route('/patients/<id>/visits', methods=['GET', 'POST'])
+def patient_visits(id):
+    patient_ref = db.collection('patients').document(id)
+    patient = patient_ref.get().to_dict()
+    patient['id'] = id
+
+    if request.method == 'POST':
+        visit = {
+            'date': request.form.get('date') or datetime.now().date().isoformat(),
+            'condition': request.form.get('condition'),
+            'notes': request.form.get('notes'),
+            'prescribed_meds': request.form.get('prescribed_meds'),
+            'created_at': datetime.now().isoformat()
+        }
+        patient_ref.collection('visits').add(visit)
+        flash('Visit added successfully.')
+        return redirect(url_for('patient_visits', id=id))
+
+    visits = patient_ref.collection('visits').order_by('date', direction=firestore.Query.DESCENDING).stream()
+    return render_template('patient_visits.html', patient=patient, visits=[{**v.to_dict(), 'id': v.id} for v in visits])
+
+@app.context_processor
+def inject_now():
+    return { 'now': datetime.now }
 
 # ================= Prescriptions =================
 @app.route('/prescriptions/create', methods=['GET', 'POST'])
