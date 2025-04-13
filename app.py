@@ -22,6 +22,18 @@ def inventory():
     medicines = db.collection('medicines').stream()
     return render_template('inventory.html', medicines=[{**m.to_dict(), 'id': m.id} for m in medicines])
 
+@app.route('/inventory/add', methods=['GET', 'POST'])
+def add_medicine():
+    if request.method == 'POST':
+        data = request.form.to_dict()
+        data['price'] = float(data['price'])
+        data['stock'] = int(data['stock'])
+        data['expiry_date'] = data['expiry_date']
+        db.collection('medicines').add(data)
+        flash('Medicine added successfully!')
+        return redirect(url_for('inventory'))
+    return render_template('add_medicine.html')
+
 @app.route('/inventory/scan-combined', methods=['POST'])
 def scan_combined():
     file = request.files.get('barcode_image')
