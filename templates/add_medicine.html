@@ -1,8 +1,26 @@
 {% extends 'layout.html' %}
 {% block content %}
+
+<h4>Add Medicine</h4>
+
+<!-- 🔍 Live Scanner Preview -->
+<div id="live-reader" style="width: 100%; max-width: 300px; margin-bottom: 1rem; display: none;"></div>
+
+<!-- 👁️ Preview of Detected Barcode -->
+<p id="preview-barcode" class="text-info mb-3" style="display: none;">
+  <strong>Detected Barcode:</strong> <span id="barcode-value"></span>
+</p>
+
+<!-- 🧾 Add Medicine Form -->
 <form method="POST">
   <input name="name" class="form-control mb-2" placeholder="Name" required>
-  <input name="barcode" class="form-control mb-2" placeholder="Barcode" required>
+
+  <!-- Barcode Input with Scanner Button -->
+  <div class="input-group mb-2">
+    <input name="barcode" id="barcode_input" class="form-control" placeholder="Barcode" required>
+    <button type="button" class="btn btn-outline-primary" onclick="startLiveScanner()">📷 Scan</button>
+  </div>
+
   <input name="type" class="form-control mb-2" placeholder="Type" required>
   <input name="price" class="form-control mb-2" placeholder="Price" required>
   <input name="stock" class="form-control mb-2" placeholder="Stock" required>
@@ -10,4 +28,47 @@
   <input type="date" name="expiry_date" class="form-control mb-3">
   <button class="btn btn-primary">Add Medicine</button>
 </form>
+
+
+<!-- 📜 Scanner Script -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  const html5QrCode = new Html5Qrcode("live-reader");
+  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+  let cameraRunning = false;
+
+  async function startLiveScanner() {
+    if (cameraRunning) return;
+
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices.length) {
+        document.getElementById("live-reader").style.display = "block";
+        await html5QrCode.start(devices[0].id, config, onScanSuccess);
+        cameraRunning = true;
+      } else {
+        alert("No camera found.");
+      }
+    } catch (err) {
+      console.error("Error starting scanner:", err);
+    }
+  }
+
+  async function stopLiveScanner() {
+    if (!cameraRunning) return;
+    await html5QrCode.stop();
+    html5QrCode.clear();
+    document.getElementById("live-reader").style.display = "none";
+    cameraRunning = false;
+  }
+
+  function onScanSuccess(decodedText, decodedResult) {
+    document.getElementById('barcode_input').value = decodedText;
+    document.getElementById('barcode-value').textContent = decodedText;
+    document.getElementById('preview-barcode').style.display = 'block';
+
+    stopLiveScanner(); // Automatically stop after scan
+  }
+</script>
+
 {% endblock %}
