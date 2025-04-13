@@ -1,28 +1,31 @@
 {% extends 'layout.html' %}
 {% block content %}
 
-<!-- 📸 Live Camera Scanner -->
-<div class="mb-3">
-  <button type="button" class="btn btn-outline-primary" onclick="startLiveScanner()">📷 Start Live Scan</button>
-</div>
-<div id="live-reader" style="width: 300px; display: none;"></div>
+<h4>Inventory</h4>
+<!-- 🔍 Live Scanner Preview -->
+<div id="live-reader" style="width: 100%; max-width: 300px; display: none;" class="mt-3"></div>
 
 <!-- 🧾 Barcode + Quantity Form -->
 <form method="POST" action="/inventory/scan-combined" enctype="multipart/form-data" class="row g-3 mb-4 align-items-end">
-  <!-- Manual Barcode Input -->
+
+  <!-- Manual Barcode Input with Inline Scan Button -->
   <div class="col-md-6">
-    <label for="manual_barcode" class="form-label">Enter Barcode Manually or Use Scanned</label>
-    <input type="text" name="manual_barcode" id="manual_barcode" class="form-control" placeholder="e.g. 0123456789">
+    <label for="manual_barcode" class="form-label">Barcode</label>
+    <div class="input-group">
+      <input type="text" name="manual_barcode" id="manual_barcode" class="form-control" placeholder="e.g. 0123456789">
+      <button type="button" class="btn btn-outline-primary" onclick="startLiveScanner()">
+        <i class="bi bi-camera"></i> Scan
+      </button>
+    </div>
   </div>
 
-  <!-- Quantity with Quick Select -->
+  <!-- Quantity Input -->
   <div class="col-md-6">
     <label for="increase_amount" class="form-label">Quantity to Increase</label>
     <input type="number" name="increase_amount" id="increase_amount" class="form-control" value="1" min="1" required>
   </div>
-  
 
-  <!-- Preview of Detected Barcode -->
+  <!-- Barcode Preview -->
   <div class="col-md-6">
     <p id="preview-barcode" class="text-info mt-4 mb-0" style="display: none;">
       <strong>Detected Barcode:</strong> <span id="barcode-value"></span>
@@ -34,6 +37,7 @@
     <button type="submit" class="btn btn-primary w-100">Submit</button>
   </div>
 </form>
+
 
 <hr>
 
@@ -58,30 +62,21 @@
   </tbody>
 </table>
 
-<!-- 📜 Live Scanner Script -->
+<!-- 📜 Scanner Script -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   const html5QrCode = new Html5Qrcode("live-reader");
   const config = { fps: 10, qrbox: { width: 250, height: 250 } };
   let cameraRunning = false;
 
-  function onScanSuccess(decodedText, decodedResult) {
-    document.getElementById('manual_barcode').value = decodedText;
-    document.getElementById('barcode-value').textContent = decodedText;
-    document.getElementById('preview-barcode').style.display = 'block';
-    stopLiveScanner(); // Optional: stop scanning after one successful read
-  }
-
   async function startLiveScanner() {
     if (cameraRunning) return;
-
     try {
       const devices = await Html5Qrcode.getCameras();
       if (devices.length) {
         document.getElementById("live-reader").style.display = "block";
         await html5QrCode.start(devices[0].id, config, onScanSuccess);
         cameraRunning = true;
-        document.getElementById("stop-btn").disabled = false;
       } else {
         alert("No camera found.");
       }
@@ -92,12 +87,21 @@
 
   async function stopLiveScanner() {
     if (!cameraRunning) return;
-
     await html5QrCode.stop();
     html5QrCode.clear();
     document.getElementById("live-reader").style.display = "none";
     cameraRunning = false;
-    document.getElementById("stop-btn").disabled = true;
+  }
+
+  function onScanSuccess(decodedText, decodedResult) {
+    document.getElementById('manual_barcode').value = decodedText;
+    document.getElementById('barcode-value').textContent = decodedText;
+    document.getElementById('preview-barcode').style.display = 'block';
+    stopLiveScanner();
   }
 </script>
+
+<!-- ✅ Bootstrap Icons (if not already in layout.html) -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+
 {% endblock %}
