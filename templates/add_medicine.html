@@ -4,33 +4,25 @@
 <h4>Add Medicine</h4>
 
 <!-- 🔍 Live Scanner Preview -->
-<div class="d-flex justify-content-center">
+<div id="scanner-wrapper" class="d-flex justify-content-center mb-3">
   <div class="text-center">
     <p id="scan-instruction" class="text-muted small mb-2" style="display: none;">
       Point your camera at a barcode
     </p>
-    <div id="live-reader" class="rounded shadow border"
-      style="width: 100%; max-width: 360px; aspect-ratio: 1; display: none;">
+    <div id="live-reader"
+         class="rounded shadow border"
+         style="width: 100%; max-width: 360px; aspect-ratio: 1; display: none;">
     </div>
   </div>
 </div>
 
-
-<!-- 👁️ Preview of Detected Barcode -->
-<p id="preview-barcode" class="text-info mb-3" style="display: none;">
-  <strong>Detected Barcode:</strong> <span id="barcode-value"></span>
-</p>
-
-<!-- 🧾 Add Medicine Form -->
+<!-- 👨‍⚕️ Add Medicine Form -->
 <form method="POST">
   <input name="name" class="form-control mb-2" placeholder="Name" required>
 
-  <!-- Barcode Input + Toggleable Scan Button -->
   <div class="input-group mb-2">
     <input name="barcode" id="barcode_input" class="form-control" placeholder="Barcode" required>
-    <button type="button" id="barcode-scan-btn" class="btn btn-outline-primary" onclick="toggleLiveScanner(this)">
-      <i class="bi bi-camera"></i> Scan
-    </button>
+    <button type="button" class="btn btn-outline-primary" onclick="toggleLiveScanner('barcode_input', null, this)">📷 Scan</button>
   </div>
 
   <input name="type" class="form-control mb-2" placeholder="Type" required>
@@ -45,37 +37,38 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   const html5QrCode = new Html5Qrcode("live-reader");
-  const config = {
-    fps: 10,
-    qrbox: {
-      width: 250,
-      height: 250
-    }
-  };
+  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
   let cameraRunning = false;
+  let targetInputId = null;
+  let autoSubmitFormId = null;
   let activeScanButton = null;
 
-  async function toggleLiveScanner(buttonElement) {
+  async function toggleLiveScanner(inputId, formId = null, buttonElement) {
     if (cameraRunning) {
       stopLiveScanner();
       return;
     }
 
+    targetInputId = inputId;
+    autoSubmitFormId = formId;
     activeScanButton = buttonElement;
 
     try {
       const devices = await Html5Qrcode.getCameras();
       if (devices.length) {
+        const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
+
         document.getElementById("live-reader").style.display = "block";
         document.getElementById("scan-instruction").style.display = "block";
         updateScanButton(true);
-        await html5QrCode.start(devices[0].id, config, onScanSuccess);
+
+        await html5QrCode.start({ deviceId: { exact: backCam.id } }, config, onScanSuccess);
         cameraRunning = true;
       } else {
         alert("No camera found.");
       }
     } catch (err) {
-      console.error("Error starting scanner:", err);
+      console.error("Scanner start failed:", err);
       updateScanButton(false);
     }
   }
@@ -84,11 +77,12 @@
     if (!cameraRunning) return;
     await html5QrCode.stop();
     html5QrCode.clear();
-    cameraRunning = false;
     document.getElementById("live-reader").style.display = "none";
     document.getElementById("scan-instruction").style.display = "none";
+    cameraRunning = false;
     updateScanButton(false);
-    activeScanButton = null;
+    targetInputId = null;
+    autoSubmitFormId = null;
   }
 
   function updateScanButton(scanning) {
@@ -102,18 +96,23 @@
       activeScanButton.innerHTML = '<i class="bi bi-camera"></i> Scan';
       activeScanButton.classList.remove("btn-outline-danger");
       activeScanButton.classList.add("btn-outline-primary");
+      activeScanButton = null;
     }
   }
 
   function onScanSuccess(decodedText, decodedResult) {
-    document.getElementById('barcode_input').value = decodedText;
-    document.getElementById('barcode-value').textContent = decodedText;
-    document.getElementById('preview-barcode').style.display = 'block';
+    if (targetInputId) {
+      const input = document.getElementById(targetInputId);
+      if (input) input.value = decodedText;
+    }
     stopLiveScanner();
+
+    if (autoSubmitFormId) {
+      document.getElementById(autoSubmitFormId).submit();
+    }
   }
 </script>
 
-<!-- Bootstrap Icons -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 
 {% endblock %}

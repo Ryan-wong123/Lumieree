@@ -118,10 +118,13 @@
     try {
       const devices = await Html5Qrcode.getCameras();
       if (devices.length) {
+        const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
+
         document.getElementById("live-reader").style.display = "block";
         document.getElementById("scan-instruction").style.display = "block";
         updateScanButton(true);
-        await html5QrCode.start(devices[0].id, config, onScanSuccess);
+
+        await html5QrCode.start({ deviceId: { exact: backCam.id } }, config, onScanSuccess);
         cameraRunning = true;
       } else {
         alert("No camera found.");
