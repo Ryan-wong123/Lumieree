@@ -1,20 +1,26 @@
-# Dockerfile for Railway deployment with pyzbar + zbar support
-
 FROM python:3.11-slim
 
-# Install zbar shared library and build essentials
+# Install system dependencies
 RUN apt-get update && \
-    apt-get install -y zbar-tools libzbar0 gcc && \
+    apt-get install -y \
+    zbar-tools \
+    libzbar0 \
+    gcc \
+    build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy all files
+# Copy code
 COPY . .
 
-# Install dependencies
+# Install Python dependencies
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Run Flask app with Gunicorn on port 8080
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]
+# Expose port for Railway
+EXPOSE 8080
+
+# Run app with Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
