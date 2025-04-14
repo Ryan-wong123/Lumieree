@@ -1,12 +1,13 @@
 # Flask TCM POS App — Full Scaffold with Routing, Templates, and Firebase
 # This will include inventory, patients, prescriptions, front desk queue, and receipt functionality.
 
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash,Response
 from firebase_admin import credentials, firestore, initialize_app
 from datetime import datetime
 from pyzbar.pyzbar import decode
 from PIL import Image
 import io
+import pandas as pd
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -370,7 +371,7 @@ def update_queue_status(queue_id, status):
     queue_ref.update({'status': status})
     return redirect(url_for('front_desk'))
 
-
+# ================= dashboard =================
 @app.route('/admin/dashboard')
 def admin_dashboard():
     today = datetime.now().date().isoformat()
@@ -426,6 +427,55 @@ def admin_dashboard():
         low_stock=low_stock,
         today_visits=visits_today,
         recent_completed=recent_completed
+    )
+
+@app.route('/admin/export/visits.csv')
+def export_visits_csv():
+    all_visits = []
+    patients = db.collection('patients').stream()
+
+    for p in patients:
+        pdata = p.to_dict()
+        visits = db.collection('patients').document(p.id).collection('visits').stream()
+        for v in visits:
+            vdata = v.to_dict()
+            all_visits.append({
+                'Patient Name': pdata.get('name'),
+                'NRIC': pdata.get('nric'),
+                'Date': vdata.get('date'),
+                'Condition': vdata.get('condition'),
+                'Notes': vdata.get('notes'),
+                'Created At': vdata.get('created_at')
+            })
+
+    df = pd.DataFrame(all_visits)
+    csv_data = df.to_csv(index=False)
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=visit_records.csv"}
+    )
+
+@app.route('/admin/export/queue.csv')
+def export_queue_csv():
+    queue_data = []
+    queue = db.collection('front_desk_queue').stream()
+    for q in queue:
+        qdata = q.to_dict()
+        patient = db.collection('patients').document(qdata.get('patient_id')).get().to_dict()
+        queue_data.append({
+            'Patient Name': patient['name'] if patient else 'Unknown',
+            'Status': qdata.get('status'),
+            'Timestamp': qdata.get('timestamp'),
+            'Items': "; ".join([f"{i['quantity']}x {i['name']}" for i in qdata.get('items', [])])
+        })
+
+    df = pd.DataFrame(queue_data)
+    csv_data = df.to_csv(index=False)
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=queue_log.csv"}
     )
 
 
