@@ -9,9 +9,6 @@
     <button class="nav-link active" id="waiting-tab" data-bs-toggle="tab" data-bs-target="#waiting" type="button" role="tab">Waiting</button>
   </li>
   <li class="nav-item">
-    <button class="nav-link" id="prepared-tab" data-bs-toggle="tab" data-bs-target="#prepared" type="button" role="tab">Prepared</button>
-  </li>
-  <li class="nav-item">
     <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button" role="tab">Completed</button>
   </li>
 </ul>
@@ -31,32 +28,11 @@
           <li>{{ i.quantity }}x {{ i.name }}</li>
           {% endfor %}
         </ul>
-        <a href="/front_desk/update/{{ item.id }}/prepared" class="btn btn-warning btn-sm">Mark Prepared</a>
         <a href="/front_desk/update/{{ item.id }}/completed" class="btn btn-success btn-sm">Mark Completed</a>
       </div>
     </div>
     {% else %}
     <p class="text-muted">No waiting items.</p>
-    {% endfor %}
-  </div>
-
-  <!-- 🟠 Prepared Tab -->
-  <div class="tab-pane fade" id="prepared" role="tabpanel">
-    {% for item in prepared %}
-    <div class="card mb-3">
-      <div class="card-body">
-        <h5>{{ item.patient_name }}</h5>
-        <p>Status: {{ item.status }}</p>
-        <ul>
-          {% for i in item["items"] %}
-          <li>{{ i.quantity }}x {{ i.name }}</li>
-          {% endfor %}
-        </ul>
-        <a href="/front_desk/update/{{ item.id }}/completed" class="btn btn-success btn-sm">Mark Completed</a>
-      </div>
-    </div>
-    {% else %}
-    <p class="text-muted">No prepared items.</p>
     {% endfor %}
   </div>
 
@@ -86,4 +62,3 @@
 </div>
 
 {% endblock %}
-

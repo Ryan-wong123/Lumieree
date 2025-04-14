@@ -363,12 +363,13 @@ def update_queue_status(queue_id, status):
                     new_stock = med_doc.get('stock', 0) + int(med['quantity'])
                     ref.update({'stock': new_stock})
 
-        queue_ref.update({'status': 'prepared'})
+        queue_ref.update({'status': 'waiting'})
         return redirect(url_for('front_desk'))
 
     # 🟡 Just update status if not completed or void
     queue_ref.update({'status': status})
     return redirect(url_for('front_desk'))
+
 
 @app.route('/admin/dashboard')
 def admin_dashboard():
