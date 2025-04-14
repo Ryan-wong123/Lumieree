@@ -122,8 +122,6 @@ def patients():
 
     return render_template('patients.html', patients=patients)
 
-
-
 @app.route('/patients/add', methods=['GET', 'POST'])
 def add_patient():
     if request.method == 'POST':
@@ -332,47 +330,56 @@ def front_desk():
 
     return render_template('front_desk.html', waiting=waiting, prepared=prepared, completed=completed)
 
-
-@app.route('/admin/queue')
-def admin_queue():
-    query = request.args.get('q', '').strip().lower()
-    queue = db.collection('front_desk_queue').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
-
-    results = []
-    for entry in queue:
-        doc = entry.to_dict()
-        patient = db.collection('patients').document(doc['patient_id']).get().to_dict()
-        entry_data = {
-            'id': entry.id,
-            'status': doc.get('status'),
-            'patient_name': patient.get('name', ''),
-            'items': doc.get('items', []),
-            'timestamp': doc.get('timestamp', ''),
-        }
-
-        # Filter based on search query
-        if query:
-            combined = f"{entry_data['patient_name']} {entry_data['status']}".lower()
-            if query in combined:
-                results.append(entry_data)
-        else:
-            results.append(entry_data)
-
-    return render_template('admin_queue.html', queue=results)
-
-
 @app.route('/front_desk/update/<queue_id>/<status>')
 def update_queue_status(queue_id, status):
     queue_ref = db.collection('front_desk_queue').document(queue_id)
     queue_doc = queue_ref.get().to_dict()
 
     if status == 'completed':
-        # ✅ Redirect to receipt generation
+        # ✅ Decrement stock when completed
+        items = queue_doc.get('items', [])
+        for med in items:
+            query = db.collection('medicines').where('name', '==', med['name']).limit(1).stream()
+            found = next(query, None)
+            if found:
+                ref = db.collection('medicines').document(found.id)
+                med_doc = found.to_dict()
+                new_stock = max(med_doc.get('stock', 0) - int(med['quantity']), 0)
+                ref.update({'stock': new_stock})
+
+        queue_ref.update({'status': 'completed'})
         return redirect(url_for('queue_receipt', queue_id=queue_id))
 
     # 🟡 Just update status if not completed
     queue_ref.update({'status': status})
     return redirect(url_for('front_desk'))
+
+@app.route('/admin/dashboard')
+def admin_dashboard():
+    from collections import Counter
+    today = datetime.now().date().isoformat()
+
+    # Count total patients
+    total_patients = len(list(db.collection('patients').stream()))
+
+    # Count visits today
+    daily_visits = 0
+    visits_ref = db.collection_group('visits').stream()
+    for visit in visits_ref:
+        data = visit.to_dict()
+        if data.get('date') == today:
+            daily_visits += 1
+
+    # Low stock: any medicine below threshold (e.g., 10)
+    low_stock = []
+    for med in db.collection('medicines').stream():
+        m = med.to_dict()
+        if m.get('stock', 0) <= 10:
+            low_stock.append(m)
+
+    return render_template('admin_dashboard.html', total_patients=total_patients,
+                           daily_visits=daily_visits, low_stock=low_stock)
+
 
 # ================= Run =================
 if __name__ == '__main__':

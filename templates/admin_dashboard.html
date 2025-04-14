@@ -1,0 +1,37 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h4>Admin Dashboard</h4>
+
+<div class="row mb-4">
+  <div class="col">
+    <div class="card">
+      <div class="card-body">
+        <h5>Total Patients</h5>
+        <p class="fs-4">{{ total_patients }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card">
+      <div class="card-body">
+        <h5>Visits Today</h5>
+        <p class="fs-4">{{ daily_visits }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h5 class="mt-4">📦 Low Stock Alerts</h5>
+{% if low_stock %}
+<table class="table">
+  <thead><tr><th>Name</th><th>Stock</th><th>Type</th></tr></thead>
+  <tbody>
+    {% for med in low_stock %}
+    <tr><td>{{ med.name }}</td><td>{{ med.stock }}</td><td>{{ med.type }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-muted">No low stock items.</p>
+{% endif %}
+{% endblock %}

@@ -30,6 +30,9 @@
           <li class="nav-item">
             <a class="nav-link {% if request.path.startswith('/front_desk') %}active{% endif %}" href="/front_desk">Front Desk</a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith('/inventory') %}active{% endif %}" href="/admin/dashboard">Admin</a>
+          </li>
         </ul>
       </div>
     </div>
