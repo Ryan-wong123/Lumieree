@@ -373,29 +373,60 @@ def update_queue_status(queue_id, status):
 
 @app.route('/admin/dashboard')
 def admin_dashboard():
-    from collections import Counter
     today = datetime.now().date().isoformat()
 
-    # Count total patients
+    # Patient count
     total_patients = len(list(db.collection('patients').stream()))
 
-    # Count visits today
-    daily_visits = 0
+    # Visits today
+    visits_today = []
     visits_ref = db.collection_group('visits').stream()
-    for visit in visits_ref:
-        data = visit.to_dict()
+    for v in visits_ref:
+        data = v.to_dict()
         if data.get('date') == today:
-            daily_visits += 1
+            patient_id = v.reference.parent.parent.id
+            patient = db.collection('patients').document(patient_id).get().to_dict()
+            visits_today.append({
+                'patient': patient['name'] if patient else 'Unknown',
+                'condition': data.get('condition'),
+                'date': data.get('date')
+            })
 
-    # Low stock: any medicine below threshold (e.g., 10)
+    # Prescriptions count
+    total_prescriptions = len(list(db.collection('prescriptions').stream()))
+
+    # Low stock medicines
     low_stock = []
-    for med in db.collection('medicines').stream():
-        m = med.to_dict()
-        if m.get('stock', 0) <= 10:
-            low_stock.append(m)
+    for m in db.collection('medicines').stream():
+        data = m.to_dict()
+        if data.get('stock', 0) <= 10:
+            low_stock.append(data)
 
-    return render_template('admin_dashboard.html', total_patients=total_patients,
-                           daily_visits=daily_visits, low_stock=low_stock)
+    # Recent completed queue items
+    completed_queue = db.collection('front_desk_queue')\
+        .where('status', '==', 'completed')\
+        .order_by('timestamp', direction=firestore.Query.DESCENDING).limit(5).stream()
+
+    recent_completed = []
+    for item in completed_queue:
+        doc = item.to_dict()
+        pid = doc.get('patient_id')
+        patient = db.collection('patients').document(pid).get().to_dict()
+        recent_completed.append({
+            'patient_name': patient['name'] if patient else 'Unknown',
+            'status': doc['status'],
+            'items': doc.get('items', []),
+            'timestamp': doc.get('timestamp', '')
+        })
+
+    return render_template("admin_dashboard.html",
+        total_patients=total_patients,
+        daily_visits=len(visits_today),
+        total_prescriptions=total_prescriptions,
+        low_stock=low_stock,
+        today_visits=visits_today,
+        recent_completed=recent_completed
+    )
 
 
 # ================= Run =================
