@@ -16,6 +16,13 @@ cred = credentials.Certificate("lumiere-583de-firebase-adminsdk-fbsvc-1501d71f13
 initialize_app(cred)
 db = firestore.client()
 
+@app.route('/api/medicines')
+def get_medicine_names():
+    meds = db.collection('medicines').stream()
+    names = [m.to_dict().get('name', '') for m in meds if m.to_dict().get('name')]
+    return {'results': names}
+
+
 # ================= Inventory =================
 @app.route('/inventory')
 def inventory():
@@ -151,35 +158,48 @@ def patient_visits(id):
     patient['id'] = id
 
     if request.method == 'POST':
+        # Get all prescription rows
+        names = request.form.getlist('med_name')
+        quantities = request.form.getlist('med_quantity')
+        dosages = request.form.getlist('med_dosage')
+
+        prescribed_meds = []
+        for i in range(len(names)):
+            prescribed_meds.append({
+                'name': names[i],
+                'quantity': int(quantities[i]),
+                'dosage': dosages[i]
+            })
+
         visit = {
             'date': request.form.get('date') or datetime.now().date().isoformat(),
             'condition': request.form.get('condition'),
             'notes': request.form.get('notes'),
-            'prescribed_meds': request.form.get('prescribed_meds'),
+            'prescribed_meds': prescribed_meds,
             'created_at': datetime.now().isoformat()
         }
 
-        # Add to visits subcollection
         patient_ref.collection('visits').add(visit)
 
-        # ✅ If meds exist, push to front desk queue
-        meds = request.form.get('prescribed_meds', '').strip()
-        if meds:
-            med_items = [
-                {'name': name.strip(), 'quantity': 1} for name in meds.split(',') if name.strip()
-            ]
+        # Optionally send to front desk
+        if prescribed_meds:
             db.collection('front_desk_queue').add({
                 'patient_id': id,
-                'items': med_items,
+                'items': prescribed_meds,
                 'status': 'waiting',
                 'timestamp': datetime.now().isoformat()
             })
 
-        flash('Visit record added.')
+        flash('Visit added.')
         return redirect(url_for('patient_visits', id=id))
 
     visits = patient_ref.collection('visits').order_by('date', direction=firestore.Query.DESCENDING).stream()
-    return render_template('patient_visits.html', patient=patient, visits=[{**v.to_dict(), 'id': v.id} for v in visits])
+    visits = [{**v.to_dict(), 'id': v.id} for v in visits]
+
+    # ✅ Get medicine names for datalist autocomplete
+    med_names = [m.to_dict().get('name') for m in db.collection('medicines').stream()]
+
+    return render_template('patient_visits.html', patient=patient, visits=visits, medicine_names=med_names)
 
 @app.route('/patients/delete/<id>', methods=['POST'])
 def delete_patient(id):
@@ -290,6 +310,11 @@ def front_desk():
     for entry in queue:
         doc = entry.to_dict()
         patient = db.collection('patients').document(doc['patient_id']).get().to_dict()
+
+        # ✅ Safeguard against missing patient
+        if not patient:
+            patient = {'name': '❌ Unknown (Deleted)', 'id': doc.get('patient_id', 'N/A')}
+
         item = {
             'id': entry.id,
             'status': doc.get('status'),
@@ -306,6 +331,7 @@ def front_desk():
             completed.append(item)
 
     return render_template('front_desk.html', waiting=waiting, prepared=prepared, completed=completed)
+
 
 @app.route('/admin/queue')
 def admin_queue():

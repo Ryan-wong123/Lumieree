@@ -1,20 +1,17 @@
 {% extends 'layout.html' %}
 {% block content %}
-
 <h4>Visit Records for {{ patient.name }}</h4>
 
-<!-- ➕ Add Visit Button triggers modal -->
-<button class="btn btn-primary mb-4" data-bs-toggle="modal" data-bs-target="#visitModal">
-  + Add Visit
-</button>
+<!-- Add Visit Button -->
+<button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#visitModal">+ Add Visit</button>
 
-<!-- 📋 Visit Modal -->
+<!-- Visit Modal -->
 <div class="modal fade" id="visitModal" tabindex="-1" aria-labelledby="visitModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <form method="POST">
         <div class="modal-header">
-          <h5 class="modal-title" id="visitModalLabel">Add New Visit</h5>
+          <h5 class="modal-title" id="visitModalLabel">Add Visit</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body row g-3">
@@ -26,13 +23,17 @@
             <label class="form-label">Condition</label>
             <input name="condition" class="form-control" required>
           </div>
-          <div class="col-md-6">
+
+          <!-- Prescription Builder -->
+          <div class="col-md-12">
             <label class="form-label">Prescribed Medications</label>
-            <input name="prescribed_meds" class="form-control" placeholder="e.g. Panadol, Ginseng">
+            <div id="prescription-list"></div>
+            <button type="button" class="btn btn-outline-secondary mt-2" onclick="addMedicineRow()">+ Add Medicine</button>
           </div>
-          <div class="col-md-6">
-            <label class="form-label">Notes</label>
-            <textarea name="notes" class="form-control" placeholder="Treatment notes..."></textarea>
+
+          <div class="col-md-12">
+            <label class="form-label">Overall Notes</label>
+            <textarea name="notes" class="form-control" placeholder="Visit notes..."></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -44,18 +45,22 @@
   </div>
 </div>
 
-<!-- 📅 Past Visits -->
+<!-- Past Visit Records -->
 <h5>Past Visits</h5>
 <table class="table table-striped">
   <thead class="table-light">
-    <tr><th>Date</th><th>Condition</th><th>Medication</th><th>Notes</th></tr>
+    <tr><th>Date</th><th>Condition</th><th>Medications</th><th>Notes</th></tr>
   </thead>
   <tbody>
     {% for v in visits %}
     <tr>
       <td>{{ v.date }}</td>
       <td>{{ v.condition }}</td>
-      <td>{{ v.prescribed_meds }}</td>
+      <td>
+        {% for med in v.prescribed_meds %}
+          <div>{{ med.name }} ({{ med.quantity }}) - {{ med.dosage }}</div>
+        {% endfor %}
+      </td>
       <td>{{ v.notes }}</td>
     </tr>
     {% else %}
@@ -64,7 +69,54 @@
   </tbody>
 </table>
 
-<!-- 🧩 Bootstrap Modal Support -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- JS for dynamic medicine builder -->
+<script>
+let medicineOptions = [];
+
+fetch("/api/medicines")
+  .then(res => res.json())
+  .then(data => { medicineOptions = data.results; });
+
+function addMedicineRow(prefill = null) {
+  const container = document.getElementById("prescription-list");
+  const row = document.createElement("div");
+  row.className = "row mb-2 align-items-end";
+
+  row.innerHTML = `
+    <div class="col-md-4">
+      <label class="form-label">Medicine</label>
+      <input list="med-list" name="med_name" class="form-control med-name" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Qty</label>
+      <input name="med_quantity" type="number" min="1" value="1" class="form-control">
+    </div>
+    <div class="col-md-5">
+      <label class="form-label">Dosage</label>
+      <input name="med_dosage" class="form-control">
+    </div>
+    <div class="col-md-1">
+      <button type="button" class="btn btn-outline-danger" onclick="this.closest('.row').remove()">&times;</button>
+    </div>
+  `;
+
+  container.appendChild(row);
+
+  if (prefill) {
+    row.querySelector('[name="med_name"]').value = prefill.name;
+    row.querySelector('[name="med_quantity"]').value = prefill.quantity;
+    row.querySelector('[name="med_dosage"]').value = prefill.dosage;
+  }
+
+  
+}
+</script>
+
+<!-- Autocomplete support -->
+<datalist id="med-list">
+  {% for name in medicine_names %}
+    <option value="{{ name }}">
+  {% endfor %}
+</datalist>
 
 {% endblock %}

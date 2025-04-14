@@ -65,7 +65,11 @@
     {% for item in completed %}
     <div class="card mb-3 border-success">
       <div class="card-body">
-        <h5>{{ item.patient_name }}</h5>
+        <h5>
+          {{ item.patient_name }}
+          {% if "Unknown" in item.patient_name %}<span class="badge bg-danger">Deleted</span>{% endif %}
+        </h5>
+        
         <p>Status: {{ item.status }}</p>
         <ul>
           {% for i in item["items"] %}
