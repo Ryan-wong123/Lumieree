@@ -4,7 +4,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash,Response
 from firebase_admin import credentials, firestore, initialize_app
 from datetime import datetime
-from pyzbar.pyzbar import decode
 from PIL import Image
 import io
 import pandas as pd
