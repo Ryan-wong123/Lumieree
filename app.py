@@ -334,10 +334,11 @@ def front_desk():
 def update_queue_status(queue_id, status):
     queue_ref = db.collection('front_desk_queue').document(queue_id)
     queue_doc = queue_ref.get().to_dict()
+    items = queue_doc.get('items', [])
+    current_status = queue_doc.get('status')
 
     if status == 'completed':
-        # ✅ Decrement stock when completed
-        items = queue_doc.get('items', [])
+        # ✅ Decrement stock when marking as completed
         for med in items:
             query = db.collection('medicines').where('name', '==', med['name']).limit(1).stream()
             found = next(query, None)
@@ -350,7 +351,22 @@ def update_queue_status(queue_id, status):
         queue_ref.update({'status': 'completed'})
         return redirect(url_for('queue_receipt', queue_id=queue_id))
 
-    # 🟡 Just update status if not completed
+    elif status == 'void':
+        # ✅ Revert stock if voiding a completed order
+        if current_status == 'completed':
+            for med in items:
+                query = db.collection('medicines').where('name', '==', med['name']).limit(1).stream()
+                found = next(query, None)
+                if found:
+                    ref = db.collection('medicines').document(found.id)
+                    med_doc = found.to_dict()
+                    new_stock = med_doc.get('stock', 0) + int(med['quantity'])
+                    ref.update({'stock': new_stock})
+
+        queue_ref.update({'status': 'prepared'})
+        return redirect(url_for('front_desk'))
+
+    # 🟡 Just update status if not completed or void
     queue_ref.update({'status': status})
     return redirect(url_for('front_desk'))
 

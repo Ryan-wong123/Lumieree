@@ -69,13 +69,13 @@
           {{ item.patient_name }}
           {% if "Unknown" in item.patient_name %}<span class="badge bg-danger">Deleted</span>{% endif %}
         </h5>
-        
         <p>Status: {{ item.status }}</p>
         <ul>
           {% for i in item["items"] %}
           <li>{{ i.quantity }}x {{ i.name }}</li>
           {% endfor %}
         </ul>
+        <a href="/front_desk/update/{{ item.id }}/void" class="btn btn-danger btn-sm">Void</a>
       </div>
     </div>
     {% else %}
@@ -86,3 +86,4 @@
 </div>
 
 {% endblock %}
+
