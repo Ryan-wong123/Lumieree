@@ -17,6 +17,10 @@ cred = credentials.Certificate("lumiere-583de-firebase-adminsdk-fbsvc-1501d71f13
 initialize_app(cred)
 db = firestore.client()
 
+@app.route('/')
+def home():
+    return redirect(url_for('patients'))
+
 @app.route('/api/medicines')
 def get_medicine_names():
     meds = db.collection('medicines').stream()
