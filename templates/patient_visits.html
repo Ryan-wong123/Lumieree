@@ -32,20 +32,36 @@
 
     <form method="POST" class="row g-3">
       <div class="col-md-4">
-        <label class="form-label">Visit Date</label>
         <input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}">
       </div>
 
       <div class="col-md-12">
         <label class="form-label">Condition</label>
-        <textarea name="condition" class="form-control form-control-lg" rows="5" placeholder="Describe patient's condition..." required></textarea>
+        <textarea name="condition" class="form-control form-control-lg" rows="7"
+          placeholder="Describe patient's condition..." required></textarea>
       </div>
 
+      <!-- Prescribed Medications (Table Style) -->
       <div class="col-md-12">
         <label class="form-label">Prescribed Medications</label>
-        <div id="prescription-list"></div>
-        <button type="button" class="btn btn-outline-secondary mt-2" onclick="addMedicineRow()">+ Add Medicine</button>
+        <div class="table-responsive">
+          <table class="table table-bordered" id="prescription-table">
+            <thead class="table-light">
+              <tr>
+                <th>Medicine Name</th>
+                <th>Quantity</th>
+                <th>Dosage</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="prescription-list">
+              <!-- Dynamic rows will be inserted here -->
+            </tbody>
+          </table>
+        </div>
+        <button type="button" class="btn btn-outline-secondary mt-2" onclick="addMedicineRow()">+</button>
       </div>
+
 
       <div class="col-md-12">
         <label class="form-label">Overall Notes</label>
@@ -93,42 +109,37 @@
 
 <!-- JS for dynamic medicine builder -->
 <script>
-  let medicineOptions = [];
-
-  fetch("/api/medicines")
-    .then(res => res.json())
-    .then(data => {
-      medicineOptions = data.results;
-    });
-
   function addMedicineRow(prefill = null) {
-    const container = document.getElementById("prescription-list");
-    const row = document.createElement("div");
-    row.className = "row mb-2 align-items-end";
+    const tbody = document.getElementById("prescription-list");
+    const tr = document.createElement("tr");
 
-    row.innerHTML = `
-    <div class="col-md-4">
-      <input list="med-list" name="med_name" class="form-control" placeholder="Medicine Name" required>
-    </div>
-    <div class="col-md-2">
-      <input name="med_quantity" type="number" min="1" value="1" class="form-control" placeholder="Qty">
-    </div>
-    <div class="col-md-5">
-      <input name="med_dosage" class="form-control" placeholder="Dosage (e.g. 2x daily)">
-    </div>
-    <div class="col-md-1">
-      <button type="button" class="btn btn-outline-danger" onclick="this.closest('.row').remove()">&times;</button>
-    </div>
-  `;
+    tr.innerHTML = `
+      <td>
+        <input list="med-list" name="med_name" class="form-control" placeholder="Medicine Name" required>
+      </td>
+      <td>
+        <input type="number" name="med_quantity" class="form-control" min="1" value="1" required>
+      </td>
+      <td>
+        <input name="med_dosage" class="form-control" placeholder="e.g. 2x daily" required>
+      </td>
+      <td class="text-center">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">×</button>
+      </td>
+    `;
 
-    container.appendChild(row);
+    tbody.appendChild(tr);
 
     if (prefill) {
-      row.querySelector('[name="med_name"]').value = prefill.name;
-      row.querySelector('[name="med_quantity"]').value = prefill.quantity;
-      row.querySelector('[name="med_dosage"]').value = prefill.dosage;
+      tr.querySelector('[name="med_name"]').value = prefill.name;
+      tr.querySelector('[name="med_quantity"]').value = prefill.quantity;
+      tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
     }
   }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    addMedicineRow();
+  });
 </script>
 
 <!-- Autocomplete support -->
