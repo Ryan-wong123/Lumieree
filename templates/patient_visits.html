@@ -1,55 +1,75 @@
 {% extends 'layout.html' %}
 {% block content %}
-<h4>Visit Records for {{ patient.name }}</h4>
 
-<!-- Add Visit Button -->
-<button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#visitModal">+ Add Visit</button>
-
-<!-- Visit Modal -->
-<div class="modal fade" id="visitModal" tabindex="-1" aria-labelledby="visitModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <form method="POST">
-        <div class="modal-header">
-          <h5 class="modal-title" id="visitModalLabel">Add Visit</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body row g-3">
-          <div class="col-md-4">
-            <label class="form-label">Visit Date</label>
-            <input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}">
-          </div>
-          <div class="col-md-8">
-            <label class="form-label">Condition</label>
-            <input name="condition" class="form-control" required>
-          </div>
-
-          <!-- Prescription Builder -->
-          <div class="col-md-12">
-            <label class="form-label">Prescribed Medications</label>
-            <div id="prescription-list"></div>
-            <button type="button" class="btn btn-outline-secondary mt-2" onclick="addMedicineRow()">+ Add Medicine</button>
-          </div>
-
-          <div class="col-md-12">
-            <label class="form-label">Overall Notes</label>
-            <textarea name="notes" class="form-control" placeholder="Visit notes..."></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button class="btn btn-primary" type="submit">Add Visit</button>
-        </div>
-      </form>
-    </div>
+<!-- Patient Details -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h4 class="card-title">{{ patient.name }}</h4>
+    <p><strong>NRIC:</strong> {{ patient.nric }}</p>
+    <p><strong>Contact:</strong> {{ patient.contact }}</p>
+    <p><strong>Address:</strong> {{ patient.address }}</p>
+    <p><strong>Email:</strong> {{ patient.email }}</p>
+    <p><strong>Date of Birth:</strong> {{ patient.dob }}</p>
+    <p><strong>Gender:</strong> {{ patient.gender }}</p>
+    <p><strong>Medical Conditions:</strong>
+      {% for condition in ['diabetes', 'hypertension', 'heart_disease', 'asthma', 'stroke', 'kidney_disease'] %}
+      {% if patient.get(condition) == 'Yes' %}
+      <span class="badge bg-success">{{ condition.replace('_', ' ').title() }}</span>
+      {% endif %}
+      {% endfor %}
+      {% if patient.other_conditions %}
+      <span class="badge bg-info">Other: {{ patient.other_conditions }}</span>
+      {% endif %}
+    </p>
   </div>
 </div>
+
+<!-- New Visit Form -->
+<!-- New Visit Form -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Add New Visit</h5>
+
+    <form method="POST" class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Visit Date</label>
+        <input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}">
+      </div>
+
+      <div class="col-md-12">
+        <label class="form-label">Condition</label>
+        <textarea name="condition" class="form-control form-control-lg" rows="5" placeholder="Describe patient's condition..." required></textarea>
+      </div>
+
+      <div class="col-md-12">
+        <label class="form-label">Prescribed Medications</label>
+        <div id="prescription-list"></div>
+        <button type="button" class="btn btn-outline-secondary mt-2" onclick="addMedicineRow()">+ Add Medicine</button>
+      </div>
+
+      <div class="col-md-12">
+        <label class="form-label">Overall Notes</label>
+        <textarea name="notes" class="form-control" rows="3" placeholder="Visit notes..."></textarea>
+      </div>
+
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary w-100">Add Visit</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 
 <!-- Past Visit Records -->
 <h5>Past Visits</h5>
 <table class="table table-striped">
   <thead class="table-light">
-    <tr><th>Date</th><th>Condition</th><th>Medications</th><th>Notes</th></tr>
+    <tr>
+      <th>Date</th>
+      <th>Condition</th>
+      <th>Medications</th>
+      <th>Notes</th>
+    </tr>
   </thead>
   <tbody>
     {% for v in visits %}
@@ -58,65 +78,64 @@
       <td>{{ v.condition }}</td>
       <td>
         {% for med in v.prescribed_meds %}
-          <div>{{ med.name }} ({{ med.quantity }}) - {{ med.dosage }}</div>
+        <div>{{ med.name }} ({{ med.quantity }}) - {{ med.dosage }}</div>
         {% endfor %}
       </td>
       <td>{{ v.notes }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="4" class="text-center text-muted">No visit history yet.</td></tr>
+    <tr>
+      <td colspan="4" class="text-center text-muted">No visit history yet.</td>
+    </tr>
     {% endfor %}
   </tbody>
 </table>
 
 <!-- JS for dynamic medicine builder -->
 <script>
-let medicineOptions = [];
+  let medicineOptions = [];
 
-fetch("/api/medicines")
-  .then(res => res.json())
-  .then(data => { medicineOptions = data.results; });
+  fetch("/api/medicines")
+    .then(res => res.json())
+    .then(data => {
+      medicineOptions = data.results;
+    });
 
-function addMedicineRow(prefill = null) {
-  const container = document.getElementById("prescription-list");
-  const row = document.createElement("div");
-  row.className = "row mb-2 align-items-end";
+  function addMedicineRow(prefill = null) {
+    const container = document.getElementById("prescription-list");
+    const row = document.createElement("div");
+    row.className = "row mb-2 align-items-end";
 
-  row.innerHTML = `
+    row.innerHTML = `
     <div class="col-md-4">
-      <label class="form-label">Medicine</label>
-      <input list="med-list" name="med_name" class="form-control med-name" required>
+      <input list="med-list" name="med_name" class="form-control" placeholder="Medicine Name" required>
     </div>
     <div class="col-md-2">
-      <label class="form-label">Qty</label>
-      <input name="med_quantity" type="number" min="1" value="1" class="form-control">
+      <input name="med_quantity" type="number" min="1" value="1" class="form-control" placeholder="Qty">
     </div>
     <div class="col-md-5">
-      <label class="form-label">Dosage</label>
-      <input name="med_dosage" class="form-control">
+      <input name="med_dosage" class="form-control" placeholder="Dosage (e.g. 2x daily)">
     </div>
     <div class="col-md-1">
       <button type="button" class="btn btn-outline-danger" onclick="this.closest('.row').remove()">&times;</button>
     </div>
   `;
 
-  container.appendChild(row);
+    container.appendChild(row);
 
-  if (prefill) {
-    row.querySelector('[name="med_name"]').value = prefill.name;
-    row.querySelector('[name="med_quantity"]').value = prefill.quantity;
-    row.querySelector('[name="med_dosage"]').value = prefill.dosage;
+    if (prefill) {
+      row.querySelector('[name="med_name"]').value = prefill.name;
+      row.querySelector('[name="med_quantity"]').value = prefill.quantity;
+      row.querySelector('[name="med_dosage"]').value = prefill.dosage;
+    }
   }
-
-  
-}
 </script>
 
 <!-- Autocomplete support -->
 <datalist id="med-list">
   {% for name in medicine_names %}
-    <option value="{{ name }}">
-  {% endfor %}
+  <option value="{{ name }}">
+    {% endfor %}
 </datalist>
 
 {% endblock %}
