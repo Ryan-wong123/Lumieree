@@ -39,10 +39,10 @@
 <h5 class="mt-4">Services Rendered</h5>
 
 <form id="servicesForm" method="POST" action="/generate_receipt_pdf">
-  <!-- Hidden input to pass patient name -->
+  <!-- Pass patient name -->
   <input type="hidden" name="patient_name" value="{{ patient.name }}">
 
-  <!-- Pass all prescribed medicines as hidden fields -->
+  <!-- Pass prescribed medicines as hidden fields -->
   {% for i in items %}
     <input type="hidden" name="medicine_name_{{ loop.index }}" value="{{ i.name }}">
     <input type="hidden" name="medicine_price_{{ loop.index }}" value="{{ i.unit_price }}">
@@ -50,7 +50,7 @@
   {% endfor %}
   <input type="hidden" name="medicine_count" value="{{ items|length }}">
 
-  <!-- Services Table -->
+  <!-- Dynamic Services Table -->
   <table class="table table-bordered">
     <thead>
       <tr>
@@ -60,21 +60,13 @@
       </tr>
     </thead>
     <tbody id="servicesTable">
+      {% for service in services %}
       <tr>
-        <td><input type="checkbox" name="use_1" class="service-checkbox" value="1"></td>
-        <td><input type="text" name="service_1" value="Consultation" readonly class="form-control-plaintext"></td>
-        <td><input type="number" name="amount_1" class="form-control service-price" min="0" value="0"></td>
+        <td><input type="checkbox" name="use_{{ loop.index }}" class="service-checkbox" value="{{ loop.index }}"></td>
+        <td><input type="text" name="service_{{ loop.index }}" value="{{ service }}" readonly class="form-control-plaintext"></td>
+        <td><input type="number" name="amount_{{ loop.index }}" class="form-control service-price" min="0" value="0"></td>
       </tr>
-      <tr>
-        <td><input type="checkbox" name="use_2" class="service-checkbox" value="2"></td>
-        <td><input type="text" name="service_2" value="Acupuncture" readonly class="form-control-plaintext"></td>
-        <td><input type="number" name="amount_2" class="form-control service-price" min="0" value="0"></td>
-      </tr>
-      <tr>
-        <td><input type="checkbox" name="use_3" class="service-checkbox" value="3"></td>
-        <td><input type="text" name="service_3" value="Cupping Therapy" readonly class="form-control-plaintext"></td>
-        <td><input type="number" name="amount_3" class="form-control service-price" min="0" value="0"></td>
-      </tr>
+      {% endfor %}
     </tbody>
   </table>
 
@@ -95,7 +87,7 @@
   </div>
 </form>
 
-<!-- Script for Live Grand Total Calculation -->
+<!-- Live Update Grand Total Script -->
 <script>
   const medicineSubtotal = {{ '%.2f' % total_medicine.value }};
 
@@ -124,7 +116,7 @@
     el.addEventListener('input', updateGrandTotal);
   });
 
-  // Initialize correct total at page load
+  // Initialize correct total when page loads
   updateGrandTotal();
 </script>
 

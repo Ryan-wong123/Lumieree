@@ -330,16 +330,34 @@ def receipt(prescription_id):
     presc_doc = db.collection('prescriptions').document(prescription_id).get()
     data = presc_doc.to_dict()
     patient = db.collection('patients').document(data['patient_id']).get().to_dict()
-    return render_template('receipt.html', patient=patient, items=data['items'], total=data['total'])
+
+    # You can predefine available services here:
+    services = [
+        "Consultation",
+        "Acupuncture",
+        "Cupping Therapy",
+        "Tui Na Massage",
+        "Herbal Medicine Advice"
+    ]
+
+    return render_template(
+        'receipt.html',
+        patient=patient,
+        items=data['items'],
+        total=data['total'],
+        services=services  # pass services list to HTML
+    )
+
+
 @app.route('/receipt/queue/<queue_id>')
 def queue_receipt(queue_id):
     queue_ref = db.collection('front_desk_queue').document(queue_id)
     queue_data = queue_ref.get().to_dict()
 
-    # ✅ 1. Update status
+    # ✅ Update status
     queue_ref.update({'status': 'completed'})
 
-    # ✅ 3. Build receipt
+    # ✅ Build receipt
     patient = db.collection('patients').document(queue_data['patient_id']).get().to_dict()
     items = []
     total = 0.0
@@ -365,7 +383,26 @@ def queue_receipt(queue_id):
                 'subtotal': 0.0
             })
 
-    return render_template('reciepts.html', patient=patient, items=items, total=round(total, 2))
+    # ✅ Define available services here too
+    services = [
+        "Consultation",
+        "Acupuncture",
+        "Cupping Therapy",
+        "Tui Na Massage",
+        "Herbal Medicine Advice"
+    ]
+
+    return render_template(
+        'reciepts.html',
+        patient=patient,
+        items=items,
+        total=round(total, 2),
+        services=services   # 🛠️ PASS SERVICES HERE
+    )
+
+
+
+
 
 @app.route('/generate_receipt_pdf', methods=['POST'])
 def generate_receipt_pdf():
