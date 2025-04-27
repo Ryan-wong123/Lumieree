@@ -13,18 +13,17 @@
     <p><strong>Gender:</strong> {{ patient.gender }}</p>
     <p><strong>Medical Conditions:</strong>
       {% for condition in ['diabetes', 'hypertension', 'heart_disease', 'asthma', 'stroke', 'kidney_disease'] %}
-      {% if patient.get(condition) == 'Yes' %}
-      <span class="badge bg-success">{{ condition.replace('_', ' ').title() }}</span>
-      {% endif %}
+        {% if patient.get(condition) == 'Yes' %}
+          <span class="badge bg-success">{{ condition.replace('_', ' ').title() }}</span>
+        {% endif %}
       {% endfor %}
       {% if patient.other_conditions %}
-      <span class="badge bg-info">Other: {{ patient.other_conditions }}</span>
+        <span class="badge bg-info">Other: {{ patient.other_conditions }}</span>
       {% endif %}
     </p>
   </div>
 </div>
 
-<!-- New Visit Form -->
 <!-- New Visit Form -->
 <div class="card mb-4">
   <div class="card-body">
@@ -32,13 +31,12 @@
 
     <form method="POST" class="row g-3">
       <div class="col-md-4">
-        <input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}">
+        <input type="date" name="date" class="form-control" value="{{ draft.date if draft else now().strftime('%Y-%m-%d') }}">
       </div>
 
       <div class="col-md-12">
         <label class="form-label">Condition</label>
-        <textarea name="condition" class="form-control form-control-lg" rows="7"
-          placeholder="Describe patient's condition..." required></textarea>
+        <textarea name="condition" class="form-control form-control-lg" rows="7" placeholder="Describe patient's condition..." required>{{ draft.condition if draft else '' }}</textarea>
       </div>
 
       <!-- Prescribed Medications (Table Style) -->
@@ -62,19 +60,18 @@
         <button type="button" class="btn btn-outline-secondary mt-2" onclick="addMedicineRow()">+</button>
       </div>
 
-
       <div class="col-md-12">
         <label class="form-label">Overall Notes</label>
-        <textarea name="notes" class="form-control" rows="3" placeholder="Visit notes..."></textarea>
+        <textarea name="notes" class="form-control" rows="3" placeholder="Visit notes...">{{ draft.notes if draft else '' }}</textarea>
       </div>
 
-      <div class="col-12">
-        <button type="submit" class="btn btn-primary w-100">Add Visit</button>
+      <div class="col-12 d-flex gap-2">
+        <button type="submit" name="action" value="save_draft" class="btn btn-warning w-50">Save Draft</button>
+        <button type="submit" name="action" value="confirm" class="btn btn-success w-50">Confirm Visit</button>
       </div>
     </form>
   </div>
 </div>
-
 
 <!-- Past Visit Records -->
 <h5>Past Visits</h5>
@@ -94,7 +91,7 @@
       <td>{{ v.condition }}</td>
       <td>
         {% for med in v.prescribed_meds %}
-        <div>{{ med.name }} ({{ med.quantity }}) - {{ med.dosage }}</div>
+          <div>{{ med.name }} ({{ med.quantity }}) - {{ med.dosage }}</div>
         {% endfor %}
       </td>
       <td>{{ v.notes }}</td>
@@ -109,44 +106,52 @@
 
 <!-- JS for dynamic medicine builder -->
 <script>
+  {% if draft and draft.prescribed_meds %}
+  const draftMeds = {{ draft.prescribed_meds|tojson }};
+  {% else %}
+  const draftMeds = [];
+  {% endif %}
+  
   function addMedicineRow(prefill = null) {
     const tbody = document.getElementById("prescription-list");
     const tr = document.createElement("tr");
-
+  
     tr.innerHTML = `
-      <td>
-        <input list="med-list" name="med_name" class="form-control" placeholder="Medicine Name" required>
-      </td>
-      <td>
-        <input type="number" name="med_quantity" class="form-control" min="1" value="1" required>
-      </td>
-      <td>
-        <input name="med_dosage" class="form-control" placeholder="e.g. 2x daily" required>
-      </td>
-      <td class="text-center">
-        <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">×</button>
-      </td>
+      <td><input list="med-list" name="med_name" class="form-control" placeholder="Medicine Name" required></td>
+      <td><input type="number" name="med_quantity" class="form-control" min="1" value="1" required></td>
+      <td><input name="med_dosage" class="form-control" placeholder="e.g. 2x daily" required></td>
+      <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">×</button></td>
     `;
-
+  
     tbody.appendChild(tr);
-
+  
     if (prefill) {
       tr.querySelector('[name="med_name"]').value = prefill.name;
       tr.querySelector('[name="med_quantity"]').value = prefill.quantity;
       tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
     }
   }
-
-  window.addEventListener('DOMContentLoaded', () => {
-    addMedicineRow();
+  
+  window.addEventListener('DOMContentLoaded', function() {
+    if (draftMeds.length > 0) {
+      draftMeds.forEach(med => {
+        addMedicineRow({ name: med.name, quantity: med.quantity, dosage: med.dosage });
+      });
+    } else {
+      addMedicineRow();
+    }
   });
-</script>
-
+  </script>
+  
+  
+  
+  
+  
 <!-- Autocomplete support -->
 <datalist id="med-list">
   {% for name in medicine_names %}
-  <option value="{{ name }}">
-    {% endfor %}
+    <option value="{{ name }}">
+  {% endfor %}
 </datalist>
 
 {% endblock %}

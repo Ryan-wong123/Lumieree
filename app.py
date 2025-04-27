@@ -160,7 +160,8 @@ def patient_visits(id):
     patient['id'] = id
 
     if request.method == 'POST':
-        # Get all prescription rows
+        action = request.form.get('action')
+
         names = request.form.getlist('med_name')
         quantities = request.form.getlist('med_quantity')
         dosages = request.form.getlist('med_dosage')
@@ -178,13 +179,19 @@ def patient_visits(id):
             'condition': request.form.get('condition'),
             'notes': request.form.get('notes'),
             'prescribed_meds': prescribed_meds,
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now().isoformat(),
+            'status': 'draft' if action == 'save_draft' else 'confirmed'
         }
+
+        # ❗ If saving a draft, delete previous draft first to avoid duplicates
+        if action == 'save_draft':
+            drafts = patient_ref.collection('visits').where('status', '==', 'draft').stream()
+            for d in drafts:
+                d.reference.delete()
 
         patient_ref.collection('visits').add(visit)
 
-        # Optionally send to front desk
-        if prescribed_meds:
+        if action == 'confirm' and prescribed_meds:
             db.collection('front_desk_queue').add({
                 'patient_id': id,
                 'items': prescribed_meds,
@@ -192,16 +199,25 @@ def patient_visits(id):
                 'timestamp': datetime.now().isoformat()
             })
 
-        flash('Visit added.')
+        flash('Visit saved as draft.' if action == 'save_draft' else 'Visit confirmed and sent to front desk.')
         return redirect(url_for('patient_visits', id=id))
 
-    visits = patient_ref.collection('visits').order_by('date', direction=firestore.Query.DESCENDING).stream()
+    # ✅ Fetch latest draft if exists
+    draft_query = patient_ref.collection('visits').where('status', '==', 'draft').limit(1).stream()
+    draft = next(draft_query, None)
+    draft = draft.to_dict() if draft else None
+
+    # ✅ Only show confirmed visits
+    visits = patient_ref.collection('visits')\
+        .where('status', '==', 'confirmed')\
+        .order_by('date', direction=firestore.Query.DESCENDING)\
+        .stream()
     visits = [{**v.to_dict(), 'id': v.id} for v in visits]
 
-    # ✅ Get medicine names for datalist autocomplete
     med_names = [m.to_dict().get('name') for m in db.collection('medicines').stream()]
 
-    return render_template('patient_visits.html', patient=patient, visits=visits, medicine_names=med_names)
+    return render_template('patient_visits.html', patient=patient, visits=visits, medicine_names=med_names, draft=draft)
+
 
 @app.route('/patients/delete/<id>', methods=['POST'])
 def delete_patient(id):
