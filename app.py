@@ -37,12 +37,13 @@ def inventory():
     medicines = []
     for doc in all_docs:
         data = doc.to_dict()
-        # If searching, filter by name or barcode (case-insensitive)
+        data['id'] = doc.id   # 🛠️ ADD THIS LINE
         if query:
             if query in data.get('name', '').lower() or query in data.get('barcode', '').lower():
                 medicines.append(data)
         else:
             medicines.append(data)
+
 
     return render_template('inventory.html', medicines=medicines)
 
@@ -57,6 +58,8 @@ def add_medicine():
         flash('Medicine added successfully!')
         return redirect(url_for('inventory'))
     return render_template('add_medicine.html')
+
+
 @app.route('/inventory/scan-combined', methods=['POST'])
 def scan_combined():
     file = request.files.get('barcode_image')
@@ -100,6 +103,30 @@ def scan_combined():
     flash(f"✅ Stock {'decreased' if adjust_type == 'decrease' else 'increased'} by {amount}. New stock: {new_stock}")
     return redirect(url_for('inventory'))
 
+
+
+@app.route('/inventory/adjust/<id>/increase', methods=['POST'])
+def increase_stock(id):
+    ref = db.collection('medicines').document(id)
+    doc = ref.get()
+    if doc.exists:
+        current = doc.to_dict().get('stock', 0)
+        ref.update({'stock': current + 1})
+        flash('✅ Stock increased by 1.')
+    else:
+        flash('❌ Medicine not found.')
+    return redirect(url_for('inventory'))
+
+@app.route('/inventory/adjust/<id>/set', methods=['POST'])
+def set_stock(id):
+    new_stock = int(request.form.get('new_stock', 0))
+    ref = db.collection('medicines').document(id)
+    if new_stock >= 0:
+        ref.update({'stock': new_stock})
+        flash('✅ Stock updated successfully.')
+    else:
+        flash('❌ Invalid stock value.')
+    return redirect(url_for('inventory'))
 
 # ================= Patients =================
 @app.route('/patients')

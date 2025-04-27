@@ -1,60 +1,7 @@
 {% extends 'layout.html' %}
 {% block content %}
 
-<h4>Add/Minus Medicine</h4>
-
-<!-- 📷 Styled Live Scanner Preview -->
-<div id="scanner-wrapper" class="d-flex justify-content-center">
-  <div class="text-center">
-    <p id="scan-instruction" class="text-muted small mb-2" style="display: none;">
-      Point your camera at a barcode
-    </p>
-    <div id="live-reader"
-         class="rounded shadow border"
-         style="width: 100%; max-width: 360px; aspect-ratio: 1; display: none;">
-    </div>
-  </div>
-</div>
-
-<!-- 🧾 Barcode + Quantity Form -->
-<form method="POST" action="/inventory/scan-combined" enctype="multipart/form-data" class="row g-3 mb-4 align-items-end">
-  <!-- Manual Barcode Input with Scanner -->
-  <div class="col-md-6">
-    <label for="manual_barcode" class="form-label">Barcode</label>
-    <div class="input-group">
-      <input type="text" name="manual_barcode" id="manual_barcode" class="form-control" placeholder="e.g. 0123456789">
-      <button type="button" id="stock-scan-btn" class="btn btn-outline-primary" onclick="toggleLiveScanner('manual_barcode', null, this)">
-        <i class="bi bi-camera"></i> Scan
-      </button>
-    </div>
-  </div>
-
-  <!-- Quantity Adjuster -->
-  <div class="col-md-6">
-    <label class="form-label">Adjust Stock</label>
-    <div class="input-group">
-      <select name="adjust_type" class="form-select" style="max-width: 120px;">
-        <option value="increase">+ Increase</option>
-        <option value="decrease">− Decrease</option>
-      </select>
-      <input type="number" name="adjust_amount" id="adjust_amount" class="form-control" value="1" min="1" required>
-    </div>
-  </div>
-
-  <!-- Detected Barcode Preview -->
-  <div class="col-md-6">
-    <p id="preview-barcode" class="text-info mt-4 mb-0" style="display: none;">
-      <strong>Detected Barcode:</strong> <span id="barcode-value"></span>
-    </p>
-  </div>
-
-  <!-- Submit Button -->
-  <div class="col-12">
-    <button type="submit" class="btn btn-primary w-100">Submit</button>
-  </div>
-</form>
-
-<hr>
+<h4>Inventory Management</h4>
 
 <!-- 🔍 Search Bar with Scan Button -->
 <form method="GET" action="/inventory" id="search-form" class="mb-4">
@@ -68,6 +15,7 @@
 
 <!-- 📦 Inventory Table -->
 <a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
+
 <table class="table">
   <thead>
     <tr>
@@ -75,7 +23,7 @@
       <th>Type</th>
       <th>Price</th>
       <th>Stock</th>
-      <th>Expiry</th>
+      <th>Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -84,8 +32,19 @@
       <td>{{ m.name }}</td>
       <td>{{ m.type }}</td>
       <td>{{ m.price }}</td>
-      <td>{{ m.stock }}</td>
-      <td>{{ m.expiry_date }}</td>
+      <td id="stock-{{ m.id }}">{{ m.stock }}</td>
+      <td>
+        <!-- Add 1 Button -->
+        <form method="POST" action="/inventory/adjust/{{ m.id }}/increase" class="d-inline">
+          <button class="btn btn-sm btn-primary" type="submit">+1</button>
+        </form>
+
+        <!-- Manual Stock Update -->
+        <form method="POST" action="/inventory/adjust/{{ m.id }}/set" class="d-inline ms-2">
+          <input type="number" name="new_stock" min="0" class="form-control d-inline-block" style="width: 80px;" placeholder="Qty" required>
+          <button class="btn btn-sm btn-success" type="submit">Save</button>
+        </form>
+      </td>
     </tr>
     {% else %}
     <tr>
@@ -95,7 +54,7 @@
   </tbody>
 </table>
 
-<!-- 🔁 Reusable Styled Scanner Script with Toggle Buttons -->
+<!-- 🔁 Reusable Scanner Script -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   const html5QrCode = new Html5Qrcode("live-reader");
@@ -149,7 +108,6 @@
 
   function updateScanButton(scanning) {
     if (!activeScanButton) return;
-
     if (scanning) {
       activeScanButton.innerHTML = '<i class="bi bi-stop-circle"></i> Stop Scanning';
       activeScanButton.classList.remove("btn-outline-primary");
@@ -167,14 +125,7 @@
       const input = document.getElementById(targetInputId);
       if (input) input.value = decodedText;
     }
-
-    if (targetInputId === 'manual_barcode') {
-      document.getElementById('barcode-value').textContent = decodedText;
-      document.getElementById('preview-barcode').style.display = 'block';
-    }
-
     stopLiveScanner();
-
     if (autoSubmitFormId) {
       document.getElementById(autoSubmitFormId).submit();
     }
