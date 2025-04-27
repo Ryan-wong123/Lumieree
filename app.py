@@ -128,6 +128,27 @@ def set_stock(id):
         flash('❌ Invalid stock value.')
     return redirect(url_for('inventory'))
 
+@app.route('/inventory/edit/<id>', methods=['GET', 'POST'])
+def edit_medicine(id):
+    medicine_ref = db.collection('medicines').document(id)
+    
+    if request.method == 'POST':
+        data = request.form.to_dict()
+        data['price'] = float(data['price'])
+        data['stock'] = int(data['stock'])
+        medicine_ref.update(data)
+        flash('Medicine updated successfully!')
+        return redirect(url_for('inventory'))
+
+    medicine = medicine_ref.get().to_dict()
+    if not medicine:
+        flash('Medicine not found!')
+        return redirect(url_for('inventory'))
+
+    medicine['id'] = id
+    return render_template('edit_medicine.html', medicine=medicine)
+
+
 # ================= Patients =================
 @app.route('/patients')
 def patients():
