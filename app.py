@@ -1,12 +1,14 @@
 # Flask TCM POS App — Full Scaffold with Routing, Templates, and Firebase
 # This will include inventory, patients, prescriptions, front desk queue, and receipt functionality.
 
-from flask import Flask, render_template, request, redirect, url_for, flash,Response
+from flask import Flask, render_template, request, redirect, url_for, flash,Response,send_file
 from firebase_admin import credentials, firestore, initialize_app
 from datetime import datetime
 from PIL import Image
 import io
 import pandas as pd
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -365,6 +367,101 @@ def queue_receipt(queue_id):
 
     return render_template('reciepts.html', patient=patient, items=items, total=round(total, 2))
 
+@app.route('/generate_receipt_pdf', methods=['POST'])
+def generate_receipt_pdf():
+    from flask import send_file, request
+    import io
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    # Receive form data
+    patient_name = request.form.get('patient_name', 'Patient')
+
+    # Prescribed Medicines
+    medicine_count = int(request.form.get('medicine_count', 0))
+    prescribed_medicines = []
+    medicine_total = 0
+
+    for i in range(1, medicine_count + 1):
+        name = request.form.get(f'medicine_name_{i}')
+        price = float(request.form.get(f'medicine_price_{i}', 0))
+        qty = int(request.form.get(f'medicine_qty_{i}', 0))
+        subtotal = price * qty
+        prescribed_medicines.append((name, price, qty, subtotal))
+        medicine_total += subtotal
+
+    # Services
+    services = []
+    service_total = 0
+    for key in request.form.keys():
+        if key.startswith('service_'):
+            service_name = request.form[key]
+            index = key.split('_')[1]
+            amount = float(request.form.get(f'amount_{index}', 0))
+            if request.form.get(f'use_{index}'):
+                services.append((service_name, amount))
+                service_total += amount
+
+    grand_total = medicine_total + service_total
+
+    # Generate PDF
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    p.setFont("Helvetica-Bold", 16)
+    p.drawCentredString(width/2, height-50, "春秋堂中医药诊所")
+    p.setFont("Helvetica-Bold", 14)
+    p.drawCentredString(width/2, height-70, "Harmony TCM Healthcare")
+    p.setFont("Helvetica", 10)
+    p.drawCentredString(width/2, height-90, "Blk 412 Bedok North Ave 2 #01-142 Singapore 460412    Tel: 9072 1288")
+
+    p.setFont("Helvetica-Bold", 18)
+    p.drawCentredString(width/2, height-130, "Receipt")
+
+    p.setFont("Helvetica", 12)
+    p.drawString(50, height-170, f"To: {patient_name}")
+    p.drawString(50, height-190, "Visit Date:")
+    p.drawString(50, height-210, "Bill No:")
+
+    # --- Prescribed Medicines Section ---
+    y = height-250
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Prescribed Medicines")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    for name, price, qty, subtotal in prescribed_medicines:
+        p.drawString(60, y, f"{name} ({qty}x @ {price:.2f}) - ${subtotal:.2f}")
+        y -= 15
+
+    y -= 10
+    p.setFont("Helvetica-Bold", 10)
+    p.drawString(60, y, f"Subtotal (Medicines): ${medicine_total:.2f}")
+    y -= 30
+
+    # --- Services Rendered Section ---
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Services Rendered")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    for service_name, amount in services:
+        p.drawString(60, y, f"{service_name} - ${amount:.2f}")
+        y -= 15
+
+    y -= 10
+    p.setFont("Helvetica-Bold", 10)
+    p.drawString(60, y, f"Subtotal (Services): ${service_total:.2f}")
+    y -= 30
+
+    # --- Grand Total ---
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, f"Grand Total: ${grand_total:.2f}")
+
+    p.showPage()
+    p.save()
+    buffer.seek(0)
+
+    return send_file(buffer, as_attachment=True, download_name="receipt.pdf", mimetype='application/pdf')
 
 
 # ================= Front Desk View =================

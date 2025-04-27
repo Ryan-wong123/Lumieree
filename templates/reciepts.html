@@ -17,14 +17,14 @@
   <tbody>
     {% set total_medicine = namespace(value=0) %}
     {% for i in items %}
-    {% set subtotal = i.unit_price * i.quantity %}
-    {% set total_medicine.value = total_medicine.value + subtotal %}
-    <tr>
-      <td>{{ i.name }}</td>
-      <td>{{ i.unit_price }}</td>
-      <td>{{ i.quantity }}</td>
-      <td>{{ '%.2f' % subtotal }}</td>
-    </tr>
+      {% set subtotal = i.unit_price * i.quantity %}
+      {% set total_medicine.value = total_medicine.value + subtotal %}
+      <tr>
+        <td>{{ i.name }}</td>
+        <td>{{ i.unit_price }}</td>
+        <td>{{ i.quantity }}</td>
+        <td>{{ '%.2f' % subtotal }}</td>
+      </tr>
     {% endfor %}
   </tbody>
   <tfoot>
@@ -37,7 +37,20 @@
 
 <!-- Services Rendered Section -->
 <h5 class="mt-4">Services Rendered</h5>
-<form id="servicesForm">
+
+<form id="servicesForm" method="POST" action="/generate_receipt_pdf">
+  <!-- Hidden input to pass patient name -->
+  <input type="hidden" name="patient_name" value="{{ patient.name }}">
+
+  <!-- Pass all prescribed medicines as hidden fields -->
+  {% for i in items %}
+    <input type="hidden" name="medicine_name_{{ loop.index }}" value="{{ i.name }}">
+    <input type="hidden" name="medicine_price_{{ loop.index }}" value="{{ i.unit_price }}">
+    <input type="hidden" name="medicine_qty_{{ loop.index }}" value="{{ i.quantity }}">
+  {% endfor %}
+  <input type="hidden" name="medicine_count" value="{{ items|length }}">
+
+  <!-- Services Table -->
   <table class="table table-bordered">
     <thead>
       <tr>
@@ -48,22 +61,21 @@
     </thead>
     <tbody id="servicesTable">
       <tr>
-        <td><input type="checkbox" class="service-checkbox"></td>
-        <td>Consultation</td>
-        <td><input type="number" class="form-control service-price" min="0" value="0"></td> <!-- NO disabled here -->
+        <td><input type="checkbox" name="use_1" class="service-checkbox" value="1"></td>
+        <td><input type="text" name="service_1" value="Consultation" readonly class="form-control-plaintext"></td>
+        <td><input type="number" name="amount_1" class="form-control service-price" min="0" value="0"></td>
       </tr>
       <tr>
-        <td><input type="checkbox" class="service-checkbox"></td>
-        <td>Acupuncture</td>
-        <td><input type="number" class="form-control service-price" min="0" value="0"></td> <!-- NO disabled here -->
+        <td><input type="checkbox" name="use_2" class="service-checkbox" value="2"></td>
+        <td><input type="text" name="service_2" value="Acupuncture" readonly class="form-control-plaintext"></td>
+        <td><input type="number" name="amount_2" class="form-control service-price" min="0" value="0"></td>
       </tr>
       <tr>
-        <td><input type="checkbox" class="service-checkbox"></td>
-        <td>Cupping Therapy</td>
-        <td><input type="number" class="form-control service-price" min="0" value="0"></td> <!-- NO disabled here -->
+        <td><input type="checkbox" name="use_3" class="service-checkbox" value="3"></td>
+        <td><input type="text" name="service_3" value="Cupping Therapy" readonly class="form-control-plaintext"></td>
+        <td><input type="number" name="amount_3" class="form-control service-price" min="0" value="0"></td>
       </tr>
     </tbody>
-
   </table>
 
   <!-- Grand Total Section -->
@@ -74,9 +86,16 @@
     </tr>
   </table>
 
-  <a href="/front_desk" class="btn btn-secondary mt-3">Back to Queue</a>
+  <div class="text-end">
+    <button type="submit" class="btn btn-primary mt-3">Generate PDF Receipt</button>
+  </div>
+
+  <div class="text-end mt-2">
+    <a href="/front_desk" class="btn btn-secondary mt-2">Back to Queue</a>
+  </div>
 </form>
 
+<!-- Script for Live Grand Total Calculation -->
 <script>
   const medicineSubtotal = {{ '%.2f' % total_medicine.value }};
 
@@ -87,8 +106,7 @@
       const priceInput = row.querySelector('.service-price');
 
       const price = parseFloat(priceInput.value) || 0;
-      
-      // Grand total only adds price if checkbox is checked
+
       if (checkbox.checked) {
         serviceTotal += price;
       }
@@ -98,18 +116,16 @@
     document.getElementById('grandTotal').innerText = `$${grandTotal.toFixed(2)}`;
   }
 
-  // Attach event listeners to BOTH checkbox and input
   document.querySelectorAll('.service-checkbox').forEach(el => {
-    el.addEventListener('change', updateGrandTotal); // Checkbox tick/untick
+    el.addEventListener('change', updateGrandTotal);
   });
 
   document.querySelectorAll('.service-price').forEach(el => {
-    el.addEventListener('input', updateGrandTotal);  // Typing/editing price
+    el.addEventListener('input', updateGrandTotal);
   });
 
   // Initialize correct total at page load
   updateGrandTotal();
 </script>
-
 
 {% endblock %}
