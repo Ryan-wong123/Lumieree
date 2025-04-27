@@ -1,28 +1,115 @@
 {% extends 'layout.html' %}
 {% block content %}
+
 <h4>Receipt for {{ patient.name }}</h4>
 
+<!-- Prescribed Medicines Section -->
+<h5>Prescribed Medicines</h5>
 <table class="table table-bordered">
   <thead>
-    <tr><th>Medicine</th><th>Unit Price</th><th>Qty</th><th>Subtotal</th></tr>
+    <tr>
+      <th>Medicine</th>
+      <th>Unit Price ($)</th>
+      <th>Qty</th>
+      <th>Subtotal ($)</th>
+    </tr>
   </thead>
   <tbody>
+    {% set total_medicine = namespace(value=0) %}
     {% for i in items %}
+    {% set subtotal = i.unit_price * i.quantity %}
+    {% set total_medicine.value = total_medicine.value + subtotal %}
     <tr>
       <td>{{ i.name }}</td>
-      <td>${{ i.unit_price }}</td>
+      <td>{{ i.unit_price }}</td>
       <td>{{ i.quantity }}</td>
-      <td>${{ i.subtotal }}</td>
+      <td>{{ '%.2f' % subtotal }}</td>
     </tr>
     {% endfor %}
   </tbody>
   <tfoot>
     <tr>
-      <th colspan="3" class="text-end">Total</th>
-      <th>${{ total }}</th>
+      <th colspan="3" class="text-end">Subtotal (Medicines):</th>
+      <th>${{ '%.2f' % total_medicine.value }}</th>
     </tr>
   </tfoot>
 </table>
 
-<a href="/front_desk" class="btn btn-secondary mt-3">Back to Queue</a>
+<!-- Services Rendered Section -->
+<h5 class="mt-4">Services Rendered</h5>
+<form id="servicesForm">
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Use</th>
+        <th>Service</th>
+        <th>Price ($)</th>
+      </tr>
+    </thead>
+    <tbody id="servicesTable">
+      <tr>
+        <td><input type="checkbox" class="service-checkbox"></td>
+        <td>Consultation</td>
+        <td><input type="number" class="form-control service-price" min="0" value="0"></td> <!-- NO disabled here -->
+      </tr>
+      <tr>
+        <td><input type="checkbox" class="service-checkbox"></td>
+        <td>Acupuncture</td>
+        <td><input type="number" class="form-control service-price" min="0" value="0"></td> <!-- NO disabled here -->
+      </tr>
+      <tr>
+        <td><input type="checkbox" class="service-checkbox"></td>
+        <td>Cupping Therapy</td>
+        <td><input type="number" class="form-control service-price" min="0" value="0"></td> <!-- NO disabled here -->
+      </tr>
+    </tbody>
+
+  </table>
+
+  <!-- Grand Total Section -->
+  <table class="table">
+    <tr>
+      <th class="text-end">Grand Total:</th>
+      <th id="grandTotal">${{ '%.2f' % total_medicine.value }}</th>
+    </tr>
+  </table>
+
+  <a href="/front_desk" class="btn btn-secondary mt-3">Back to Queue</a>
+</form>
+
+<script>
+  const medicineSubtotal = {{ '%.2f' % total_medicine.value }};
+
+  function updateGrandTotal() {
+    let serviceTotal = 0;
+    document.querySelectorAll('#servicesTable tr').forEach(row => {
+      const checkbox = row.querySelector('.service-checkbox');
+      const priceInput = row.querySelector('.service-price');
+
+      const price = parseFloat(priceInput.value) || 0;
+      
+      // Grand total only adds price if checkbox is checked
+      if (checkbox.checked) {
+        serviceTotal += price;
+      }
+    });
+
+    const grandTotal = medicineSubtotal + serviceTotal;
+    document.getElementById('grandTotal').innerText = `$${grandTotal.toFixed(2)}`;
+  }
+
+  // Attach event listeners to BOTH checkbox and input
+  document.querySelectorAll('.service-checkbox').forEach(el => {
+    el.addEventListener('change', updateGrandTotal); // Checkbox tick/untick
+  });
+
+  document.querySelectorAll('.service-price').forEach(el => {
+    el.addEventListener('input', updateGrandTotal);  // Typing/editing price
+  });
+
+  // Initialize correct total at page load
+  updateGrandTotal();
+</script>
+
+
 {% endblock %}
