@@ -373,6 +373,8 @@ def generate_receipt_pdf():
     import io
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
+    from datetime import datetime
+    import random
 
     # Receive form data
     patient_name = request.form.get('patient_name', 'Patient')
@@ -404,11 +406,16 @@ def generate_receipt_pdf():
 
     grand_total = medicine_total + service_total
 
+    # --- Auto-generate Visit Date and Bill No ---
+    visit_date = datetime.now().strftime("%d-%m-%Y")  # e.g., 28-04-2025
+    bill_no = f"R{datetime.now().strftime('%Y%m%d%H%M%S')}"  # Unique based on date and time
+
     # Generate PDF
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
+    # --- Header ---
     p.setFont("Helvetica-Bold", 16)
     p.drawCentredString(width/2, height-50, "春秋堂中医药诊所")
     p.setFont("Helvetica-Bold", 14)
@@ -416,13 +423,15 @@ def generate_receipt_pdf():
     p.setFont("Helvetica", 10)
     p.drawCentredString(width/2, height-90, "Blk 412 Bedok North Ave 2 #01-142 Singapore 460412    Tel: 9072 1288")
 
+    # --- Title ---
     p.setFont("Helvetica-Bold", 18)
     p.drawCentredString(width/2, height-130, "Receipt")
 
+    # --- Patient Details ---
     p.setFont("Helvetica", 12)
     p.drawString(50, height-170, f"To: {patient_name}")
-    p.drawString(50, height-190, "Visit Date:")
-    p.drawString(50, height-210, "Bill No:")
+    p.drawString(50, height-190, f"Visit Date: {visit_date}")
+    p.drawString(50, height-210, f"Bill No: {bill_no}")
 
     # --- Prescribed Medicines Section ---
     y = height-250
@@ -431,7 +440,7 @@ def generate_receipt_pdf():
     y -= 20
     p.setFont("Helvetica", 10)
     for name, price, qty, subtotal in prescribed_medicines:
-        p.drawString(60, y, f"{name} ({qty}x @ {price:.2f}) - ${subtotal:.2f}")
+        p.drawString(60, y, f"{name} ({qty}x @ ${price:.2f}) - ${subtotal:.2f}")
         y -= 15
 
     y -= 10
@@ -461,7 +470,8 @@ def generate_receipt_pdf():
     p.save()
     buffer.seek(0)
 
-    return send_file(buffer, as_attachment=True, download_name="receipt.pdf", mimetype='application/pdf')
+    return send_file(buffer, as_attachment=True, download_name=f"{bill_no}.pdf", mimetype='application/pdf')
+
 
 
 # ================= Front Desk View =================
