@@ -183,12 +183,12 @@ def patient_visits(id):
             'status': 'draft' if action == 'save_draft' else 'confirmed'
         }
 
-        # ❗ If saving a draft, delete previous draft first to avoid duplicates
-        if action == 'save_draft':
-            drafts = patient_ref.collection('visits').where('status', '==', 'draft').stream()
-            for d in drafts:
-                d.reference.delete()
+        # ❗ Always delete existing drafts first
+        drafts = patient_ref.collection('visits').where('status', '==', 'draft').stream()
+        for d in drafts:
+            d.reference.delete()
 
+        # Add new visit
         patient_ref.collection('visits').add(visit)
 
         if action == 'confirm' and prescribed_meds:
@@ -217,6 +217,7 @@ def patient_visits(id):
     med_names = [m.to_dict().get('name') for m in db.collection('medicines').stream()]
 
     return render_template('patient_visits.html', patient=patient, visits=visits, medicine_names=med_names, draft=draft)
+
 
 
 @app.route('/patients/delete/<id>', methods=['POST'])
