@@ -800,7 +800,6 @@ def delete_appointment():
 
 @app.route('/appointments/event_counts')
 def appointment_event_counts():
-    from collections import defaultdict
     booking_counts = defaultdict(int)
 
     all_docs = db.collection('appointments').stream()
