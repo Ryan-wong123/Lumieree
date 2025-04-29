@@ -40,15 +40,15 @@ def inventory():
     medicines = []
     for doc in all_docs:
         data = doc.to_dict()
-        data['id'] = doc.id   # 🛠️ ADD THIS LINE
+        data['id'] = doc.id  # ✅ Needed for adjusting/editing
         if query:
             if query in data.get('name', '').lower() or query in data.get('barcode', '').lower():
                 medicines.append(data)
         else:
             medicines.append(data)
 
-
     return render_template('inventory.html', medicines=medicines)
+
 
 @app.route('/inventory/add', methods=['GET', 'POST'])
 def add_medicine():
@@ -57,6 +57,7 @@ def add_medicine():
         data['price'] = float(data['price'])
         data['stock'] = int(data['stock'])
         data['expiry_date'] = data['expiry_date']
+        data['batch_number'] = request.form.get('batch_number', '')
         db.collection('medicines').add(data)
         flash('Medicine added successfully!')
         return redirect(url_for('inventory'))
@@ -139,6 +140,7 @@ def edit_medicine(id):
         data = request.form.to_dict()
         data['price'] = float(data['price'])
         data['stock'] = int(data['stock'])
+        data['batch_number'] = request.form.get('batch_number', '')
         medicine_ref.update(data)
         flash('Medicine updated successfully!')
         return redirect(url_for('inventory'))
@@ -400,10 +402,6 @@ def queue_receipt(queue_id):
         total=round(total, 2),
         services=services   # 🛠️ PASS SERVICES HERE
     )
-
-
-
-
 
 @app.route('/generate_receipt_pdf', methods=['POST'])
 def generate_receipt_pdf():

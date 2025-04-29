@@ -10,7 +10,8 @@
   <input name="stock" type="number" value="{{ medicine.stock }}" class="form-control mb-2" placeholder="Stock" required>
   <input name="dosage_info" value="{{ medicine.dosage_info }}" class="form-control mb-2" placeholder="Dosage Info">
   <input type="date" name="expiry_date" value="{{ medicine.expiry_date }}" class="form-control mb-3">
-  
+  <input name="batch_number" value="{{ medicine.batch_number or '' }}" class="form-control mb-2" placeholder="Batch Number">
+
   <button class="btn btn-primary">Save Changes</button>
 </form>
 

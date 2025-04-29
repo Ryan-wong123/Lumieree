@@ -15,48 +15,52 @@
 
 <!-- 📦 Inventory Table -->
 <a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
+{% set grouped = {} %}
+{% for m in medicines %}
+  {% set name = m.name %}
+  {% if name not in grouped %}
+    {% set _ = grouped.update({name: []}) %}
+  {% endif %}
+  {% set _ = grouped[name].append(m) %}
+{% endfor %}
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Type</th>
-      <th>Price</th>
-      <th>Stock</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for m in medicines %}
-    <tr>
-      <td>{{ m.name }}</td>
-      <td>{{ m.type }}</td>
-      <td>{{ m.price }}</td>
-      <td id="stock-{{ m.id }}">{{ m.stock }}</td>
-      <td>
-        <!-- Add 1 Button -->
-        <form method="POST" action="/inventory/adjust/{{ m.id }}/increase" class="d-inline">
-          <button class="btn btn-sm btn-primary" type="submit">+1</button>
-        </form>
-      
-        <!-- Manual Stock Update -->
-        <form method="POST" action="/inventory/adjust/{{ m.id }}/set" class="d-inline ms-2">
-          <input type="number" name="new_stock" min="0" class="form-control d-inline-block" style="width: 80px;" placeholder="Qty" required>
-          <button class="btn btn-sm btn-success" type="submit">Save</button>
-        </form>
-      
-        <!-- ✏️ Edit Button -->
-        <a href="/inventory/edit/{{ m.id }}" class="btn btn-sm btn-warning ms-2">Edit</a>
-      </td>
-      
-    </tr>
-    {% else %}
-    <tr>
-      <td colspan="5" class="text-center">No results found.</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% for name, batch_list in grouped.items() %}
+  <h5 class="mt-4">{{ name }}</h5>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Barcode</th>
+        <th>Batch No.</th>
+        <th>Expiry</th>
+        <th>Stock</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in batch_list %}
+      <tr>
+        <td>{{ m.barcode }}</td>
+        <td>{{ m.batch_number }}</td>
+        <td>{{ m.expiry_date }}</td>
+        <td>{{ m.stock }}</td>
+        <td>
+          <!-- +1 -->
+          <form method="POST" action="/inventory/adjust/{{ m.id }}/increase" class="d-inline">
+            <button class="btn btn-sm btn-primary" type="submit">+1</button>
+          </form>
+          <!-- Set Qty -->
+          <form method="POST" action="/inventory/adjust/{{ m.id }}/set" class="d-inline ms-2">
+            <input type="number" name="new_stock" min="0" class="form-control d-inline-block" style="width: 80px;" placeholder="Qty" required>
+            <button class="btn btn-sm btn-success" type="submit">Save</button>
+          </form>
+          <!-- Edit -->
+          <a href="/inventory/edit/{{ m.id }}" class="btn btn-sm btn-warning ms-2">Edit</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endfor %}
 
 <!-- 🔁 Reusable Scanner Script -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
