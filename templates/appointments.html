@@ -1,0 +1,51 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h4>Doctor Appointment Scheduler</h4>
+
+<form method="POST" action="/appointments/save">
+  <table id="appointmentTable" class="table table-bordered table-sm text-center align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Patient Name</th>
+        {% for hour in range(9, 18) %}
+          <th>{{ "%02d:00" % hour }} - {{ "%02d:00" % (hour+1) }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for patient in patients %}
+      <tr>
+        <td><input type="text" class="form-control" name="patient_name_{{ loop.index }}" value="{{ patient.name }}"></td>
+        {% for hour in range(9, 18) %}
+          <td>
+            <input type="text" class="form-control" name="slot_{{ loop.index }}_{{ hour }}" 
+            value="{{ appointments.get(patient.name, {}).get(hour|string, '') }}">
+          </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <button type="button" class="btn btn-outline-primary" onclick="addRow()">+ Add Patient</button>
+  <button type="submit" class="btn btn-success mt-3">Save Appointments</button>
+</form>
+
+<script>
+let rowCount = {{ patients|length }} + 1;
+
+function addRow() {
+  const table = document.getElementById('appointmentTable').getElementsByTagName('tbody')[0];
+  const newRow = document.createElement('tr');
+
+  let cells = `<td><input type="text" class="form-control" name="patient_name_${rowCount}"></td>`;
+  for (let hour = 9; hour < 18; hour++) {
+    cells += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}"></td>`;
+  }
+
+  newRow.innerHTML = cells;
+  table.appendChild(newRow);
+  rowCount++;
+}
+</script>
+{% endblock %}

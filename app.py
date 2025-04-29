@@ -690,6 +690,56 @@ def export_queue_csv():
         headers={"Content-disposition": "attachment; filename=queue_log.csv"}
     )
 
+# =================== Appointment ===================
+@app.route('/appointments')
+def appointments():
+    patients = db.collection('patients').stream()
+    appointments = db.collection('appointments').stream()
+
+    # Convert into easier dict
+    appointment_data = {}
+    for a in appointments:
+        appt = a.to_dict()
+        appointment_data[appt['patient_name']] = appt.get('slots', {})
+
+    return render_template('appointments.html',
+                           patients=[p.to_dict() for p in patients],
+                           appointments=appointment_data)
+
+
+@app.route('/appointments/save', methods=['POST'])
+def save_appointments():
+    form = request.form.to_dict()
+    appointment_batches = []
+
+    row_num = 1
+    while f"patient_name_{row_num}" in form:
+        patient_name = form.get(f"patient_name_{row_num}")
+        slots = {}
+
+        for hour in range(9, 18):  # 9AM - 6PM
+            slot_value = form.get(f"slot_{row_num}_{hour}", "")
+            slots[str(hour)] = slot_value
+
+        # Save/update into appointments collection
+        appointment_batches.append({
+            'patient_name': patient_name,
+            'slots': slots,
+            'timestamp': datetime.now().isoformat()
+        })
+        row_num += 1
+
+    # Clear all previous first (optional: depends on design)
+    for doc in db.collection('appointments').stream():
+        doc.reference.delete()
+
+    for batch in appointment_batches:
+        db.collection('appointments').add(batch)
+
+    flash("Appointments saved successfully!")
+    return redirect(url_for('appointments'))
+
+
 
 # ================= Run =================
 if __name__ == '__main__':
