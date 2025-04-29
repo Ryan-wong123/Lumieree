@@ -1,8 +1,8 @@
 # Flask TCM POS App — Full Scaffold with Routing, Templates, and Firebase
 # This will include inventory, patients, prescriptions, front desk queue, and receipt functionality.
 
-from flask import Flask, render_template, request, redirect, url_for, flash,Response,send_file,jsonify
-from firebase_admin import credentials, firestore, initialize_app
+from flask import Flask, render_template, request, redirect, url_for, flash,Response,send_file,jsonify,session
+from firebase_admin import credentials, firestore, initialize_app, auth
 from datetime import datetime
 from PIL import Image
 import io
@@ -10,9 +10,13 @@ import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from collections import defaultdict
+import requests
+
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
+
+FIREBASE_API_KEY = "AIzaSyBQ7JomtN49PzQcwFJQPb7F4ytySGriTUs"
 
 # Firebase Initialization
 cred = credentials.Certificate("lumiere-583de-firebase-adminsdk-fbsvc-1501d71f13.json")
@@ -825,6 +829,67 @@ def appointment_event_counts():
         })
 
     return jsonify(events)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        try:
+            # Use Firebase REST API to verify email/password
+            payload = {
+                'email': email,
+                'password': password,
+                'returnSecureToken': True
+            }
+            r = requests.post(
+                f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}",
+                json=payload
+            )
+            res = r.json()
+            if "idToken" in res:
+                session['user'] = res['localId']
+                flash("✅ Login successful.")
+                return redirect(url_for('patients'))
+            else:
+                flash("❌ Invalid credentials.")
+        except Exception as e:
+            flash(f"❌ Error: {str(e)}")
+    return render_template('login.html')
+
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    if 'user' not in session:
+        flash("Please log in first.")
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        uid = session['user']
+        new_email = request.form.get('new_email')
+        new_password = request.form.get('new_password')
+
+        updates = {}
+        if new_email:
+            updates['email'] = new_email
+        if new_password:
+            updates['password'] = new_password
+
+        try:
+            auth.update_user(uid, **updates)
+            flash("✅ Account updated successfully.")
+        except Exception as e:
+            flash(f"❌ Error: {str(e)}")
+
+    return render_template('settings.html')
+
+
+@app.before_request
+def check_auth():
+    # Allow access to login page and static files without login
+    allowed_routes = ['login']  
+    if request.endpoint not in allowed_routes and 'user' not in session:
+        return redirect(url_for('login'))
+
 
 # ================= Run =================
 if __name__ == '__main__':
