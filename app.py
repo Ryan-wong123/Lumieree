@@ -153,6 +153,12 @@ def edit_medicine(id):
     medicine['id'] = id
     return render_template('edit_medicine.html', medicine=medicine)
 
+@app.route('/inventory/delete/<id>', methods=['POST'])
+def delete_medicine(id):
+    db.collection('medicines').document(id).delete()
+    flash('❌ Medicine deleted successfully.')
+    return redirect(url_for('inventory'))
+
 
 # ================= Patients =================
 @app.route('/patients')
