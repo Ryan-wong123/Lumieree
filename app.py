@@ -9,6 +9,7 @@ import io
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from collections import defaultdict
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -694,23 +695,49 @@ def export_queue_csv():
 @app.route('/appointments')
 def appointments_combined():
     date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
-    
-    # Only load patients who have a booking on this date
-    appointment_docs = db.collection('appointments').where('date', '==', date_str).stream()
 
+    # Load current day's appointments
+    appointment_docs = db.collection('appointments').where('date', '==', date_str).stream()
     patients = []
     appointment_data = {}
-    for a in appointment_docs:
-        appt = a.to_dict()
-        name = appt['patient_name']
-        patients.append({'name': name})  # Only booked patients
-        appointment_data[name] = appt.get('slots', {})
+    for doc in appointment_docs:
+        data = doc.to_dict()
+        name = data['patient_name']
+        patients.append({'name': name})
+        appointment_data[name] = data.get('slots', {})
+
+    # Count bookings per date
+    all_docs = db.collection('appointments').stream()
+    booking_counts = defaultdict(int)
+    for doc in all_docs:
+        data = doc.to_dict()
+        date = data.get('date')
+        if date:
+            booking_counts[date] += 1
+
+    # Prepare color-coded events
+    event_list = []
+    for date, count in booking_counts.items():
+        if count <= 2:
+            color = "#198754"  # green
+        elif count <= 5:
+            color = "#ffc107"  # yellow
+        else:
+            color = "#dc3545"  # red
+
+        event_list.append({
+            'title': f"{count} bookings",
+            'start': date,
+            'allDay': True,
+            'backgroundColor': color,
+            'borderColor': color
+        })
 
     return render_template('appointments.html',
                            patients=patients,
                            appointments=appointment_data,
-                           selected_date=date_str)
-
+                           selected_date=date_str,
+                           events=event_list)
 
 @app.route('/appointments/save', methods=['POST'])
 def save_appointments():
@@ -750,15 +777,13 @@ def appointments_json():
         return {'patients': []}
 
     appointment_docs = db.collection('appointments').where('date', '==', date_str).stream()
-
     result = []
-    for a in appointment_docs:
-        data = a.to_dict()
+    for doc in appointment_docs:
+        data = doc.to_dict()
         result.append({
-            'name': data.get('patient_name'),
+            'name': data['patient_name'],
             'slots': data.get('slots', {})
         })
-
     return {'patients': result}
 
 # ================= Run =================

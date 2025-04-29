@@ -1,6 +1,15 @@
 {% extends 'layout.html' %}
 {% block content %}
-<!-- FullCalendar View -->
+<h4>Doctor Appointment Calendar</h4>
+
+<!-- Booking Color Legend -->
+<div class="mb-2">
+  <span class="badge bg-success">1–2 bookings</span>
+  <span class="badge bg-warning text-dark">3–5 bookings</span>
+  <span class="badge bg-danger">6+ bookings</span>
+</div>
+
+<!-- FullCalendar Container -->
 <div id="calendar"></div>
 
 <!-- Timeslot Form -->
@@ -50,7 +59,8 @@ document.addEventListener('DOMContentLoaded', function () {
           updateTable(data);
           document.getElementById('selectedDate').value = info.dateStr;
         });
-    }
+    },
+    events: {{ events | tojson }}
   });
   calendar.render();
 });
