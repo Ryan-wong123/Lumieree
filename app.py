@@ -692,54 +692,74 @@ def export_queue_csv():
 
 # =================== Appointment ===================
 @app.route('/appointments')
-def appointments():
-    patients = db.collection('patients').stream()
-    appointments = db.collection('appointments').stream()
+def appointments_combined():
+    date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+    
+    # Only load patients who have a booking on this date
+    appointment_docs = db.collection('appointments').where('date', '==', date_str).stream()
 
-    # Convert into easier dict
+    patients = []
     appointment_data = {}
-    for a in appointments:
+    for a in appointment_docs:
         appt = a.to_dict()
-        appointment_data[appt['patient_name']] = appt.get('slots', {})
+        name = appt['patient_name']
+        patients.append({'name': name})  # Only booked patients
+        appointment_data[name] = appt.get('slots', {})
 
     return render_template('appointments.html',
-                           patients=[p.to_dict() for p in patients],
-                           appointments=appointment_data)
+                           patients=patients,
+                           appointments=appointment_data,
+                           selected_date=date_str)
 
 
 @app.route('/appointments/save', methods=['POST'])
 def save_appointments():
     form = request.form.to_dict()
-    appointment_batches = []
+    date_str = form.get('date') or datetime.now().strftime('%Y-%m-%d')
 
+    appointment_batches = []
     row_num = 1
     while f"patient_name_{row_num}" in form:
         patient_name = form.get(f"patient_name_{row_num}")
         slots = {}
-
-        for hour in range(9, 18):  # 9AM - 6PM
+        for hour in range(9, 18):
             slot_value = form.get(f"slot_{row_num}_{hour}", "")
             slots[str(hour)] = slot_value
 
-        # Save/update into appointments collection
         appointment_batches.append({
             'patient_name': patient_name,
             'slots': slots,
+            'date': date_str,
             'timestamp': datetime.now().isoformat()
         })
         row_num += 1
 
-    # Clear all previous first (optional: depends on design)
-    for doc in db.collection('appointments').stream():
+    for doc in db.collection('appointments').where('date', '==', date_str).stream():
         doc.reference.delete()
 
     for batch in appointment_batches:
         db.collection('appointments').add(batch)
 
-    flash("Appointments saved successfully!")
-    return redirect(url_for('appointments'))
+    flash(f"Appointments saved for {date_str}")
+    return redirect(url_for('appointments_combined', date=date_str))
 
+@app.route('/appointments/json')
+def appointments_json():
+    date_str = request.args.get('date')
+    if not date_str:
+        return {'patients': []}
 
+    appointment_docs = db.collection('appointments').where('date', '==', date_str).stream()
+
+    result = []
+    for a in appointment_docs:
+        data = a.to_dict()
+        result.append({
+            'name': data.get('patient_name'),
+            'slots': data.get('slots', {})
+        })
+
+    return {'patients': result}
 
 # ================= Run =================
 if __name__ == '__main__':
