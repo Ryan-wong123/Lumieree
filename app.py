@@ -1,7 +1,7 @@
 # Flask TCM POS App — Full Scaffold with Routing, Templates, and Firebase
 # This will include inventory, patients, prescriptions, front desk queue, and receipt functionality.
 
-from flask import Flask, render_template, request, redirect, url_for, flash,Response,send_file
+from flask import Flask, render_template, request, redirect, url_for, flash,Response,send_file,jsonify
 from firebase_admin import credentials, firestore, initialize_app
 from datetime import datetime
 from PIL import Image
@@ -696,35 +696,28 @@ def export_queue_csv():
 def appointments_combined():
     date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
 
-    # Load current day's appointments
+    # Load bookings for selected date
     appointment_docs = db.collection('appointments').where('date', '==', date_str).stream()
     patients = []
     appointment_data = {}
     for doc in appointment_docs:
         data = doc.to_dict()
         name = data['patient_name']
-        patients.append({'name': name})
+        contact = data.get('contact', '')
+        patients.append({'name': name, 'contact': contact})
         appointment_data[name] = data.get('slots', {})
 
-    # Count bookings per date
+    # Count bookings per day for calendar coloring
     all_docs = db.collection('appointments').stream()
     booking_counts = defaultdict(int)
     for doc in all_docs:
         data = doc.to_dict()
-        date = data.get('date')
-        if date:
-            booking_counts[date] += 1
+        if 'date' in data:
+            booking_counts[data['date']] += 1
 
-    # Prepare color-coded events
     event_list = []
     for date, count in booking_counts.items():
-        if count <= 2:
-            color = "#198754"  # green
-        elif count <= 5:
-            color = "#ffc107"  # yellow
-        else:
-            color = "#dc3545"  # red
-
+        color = "#198754" if count <= 2 else "#ffc107" if count <= 5 else "#dc3545"
         event_list.append({
             'title': f"{count} bookings",
             'start': date,
@@ -748,6 +741,7 @@ def save_appointments():
     row_num = 1
     while f"patient_name_{row_num}" in form:
         patient_name = form.get(f"patient_name_{row_num}")
+        contact = form.get(f"contact_{row_num}", "")
         slots = {}
         for hour in range(9, 18):
             slot_value = form.get(f"slot_{row_num}_{hour}", "")
@@ -755,6 +749,7 @@ def save_appointments():
 
         appointment_batches.append({
             'patient_name': patient_name,
+            'contact': contact,
             'slots': slots,
             'date': date_str,
             'timestamp': datetime.now().isoformat()
@@ -770,6 +765,7 @@ def save_appointments():
     flash(f"Appointments saved for {date_str}")
     return redirect(url_for('appointments_combined', date=date_str))
 
+
 @app.route('/appointments/json')
 def appointments_json():
     date_str = request.args.get('date')
@@ -781,10 +777,51 @@ def appointments_json():
     for doc in appointment_docs:
         data = doc.to_dict()
         result.append({
-            'name': data['patient_name'],
+            'name': data.get('patient_name'),
+            'contact': data.get('contact', ''),
             'slots': data.get('slots', {})
         })
     return {'patients': result}
+
+@app.route('/appointments/delete', methods=['POST'])
+def delete_appointment():
+    patient_name = request.form.get('patient_name')
+    date = request.form.get('date')
+
+    # Find and delete matching appointment
+    docs = db.collection('appointments') \
+        .where('patient_name', '==', patient_name) \
+        .where('date', '==', date).stream()
+
+    for doc in docs:
+        doc.reference.delete()
+
+    return '', 204  # No content for JS
+
+@app.route('/appointments/event_counts')
+def appointment_event_counts():
+    from collections import defaultdict
+    booking_counts = defaultdict(int)
+
+    all_docs = db.collection('appointments').stream()
+    for doc in all_docs:
+        data = doc.to_dict()
+        date = data.get('date')
+        if date:
+            booking_counts[date] += 1
+
+    events = []
+    for date, count in booking_counts.items():
+        color = "#198754" if count <= 2 else "#ffc107" if count <= 5 else "#dc3545"
+        events.append({
+            'title': f"{count} bookings",
+            'start': date,
+            'allDay': True,
+            'backgroundColor': color,
+            'borderColor': color
+        })
+
+    return jsonify(events)
 
 # ================= Run =================
 if __name__ == '__main__':
