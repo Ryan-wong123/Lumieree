@@ -54,20 +54,22 @@
   <table class="table table-bordered">
     <thead>
       <tr>
-        <th>Use</th>
-        <th>Service</th>
-        <th>Price ($)</th>
+        <th style="width: 10%;">Use</th>
+        <th style="width: 70%;">Service</th>
+        <th style="width: 20%;">Price ($)</th>
       </tr>
     </thead>
+    
     <tbody id="servicesTable">
       {% for service in services %}
       <tr>
         <td><input type="checkbox" name="use_{{ loop.index }}" class="service-checkbox" value="{{ loop.index }}"></td>
-        <td><input type="text" name="service_{{ loop.index }}" value="{{ service }}" readonly class="form-control-plaintext"></td>
-        <td><input type="number" name="amount_{{ loop.index }}" class="form-control service-price" min="0" value="0"></td>
+        <td><input type="text" name="service_{{ loop.index }}" value="{{ service }}" readonly class="form-control-plaintext" style="width: 100%;"></td>
+        <td><input type="number" name="amount_{{ loop.index }}" class="form-control service-price" min="0" value="0" style="width: 100px;"></td>
       </tr>
       {% endfor %}
     </tbody>
+    
   </table>
 
   <!-- Grand Total Section -->

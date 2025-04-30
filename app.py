@@ -27,14 +27,13 @@ db = firestore.client()
 def home():
     return redirect(url_for('patients'))
 
+# ================= Inventory =================
 @app.route('/api/medicines')
 def get_medicine_names():
     meds = db.collection('medicines').stream()
     names = [m.to_dict().get('name', '') for m in meds if m.to_dict().get('name')]
     return {'results': names}
 
-
-# ================= Inventory =================
 @app.route('/inventory')
 def inventory():
     query = request.args.get('q', '').strip().lower()
@@ -398,11 +397,40 @@ def queue_receipt(queue_id):
 
     # ✅ Define available services here too
     services = [
-        "Consultation",
+        "Newly Diagnosed",
         "Acupuncture",
-        "Cupping Therapy",
-        "Tui Na Massage",
-        "Herbal Medicine Advice"
+        "Cupping Treatment (per part)",
+        "Scrapping Treatment",
+        "Pricking Bloodletting",
+        "Calf bruise Bloodletting",
+        "Bandage",
+        "Plaster Cloth",
+        "Pain Treatments (per part)",
+        "Capsules",
+        "Honey Pill (big)",
+        "Tablets",
+        "Package 1 (Free clinic fee, acupuncture 1X)",
+        "Package 2 (Free clinic fee, acupuncture 3X)",
+        "Package 3 (Free clinic fee, acupuncture 5X)",
+        "Acupuncture & Cupping Package (10X, 1 aching part each time)"
+        "Acupuncture Package (10x)",
+        "Acupuncture Package (20x)",
+        "Acupuncture Package (30x)",
+        "Cupping (10x)",
+        "Massage Package (10x each 45 mins)",
+        "Facial Acupuncture & Beauty Massage (15 minutes)",
+        "Facial Beauty Acupuncture",
+        "Facial Beauty Scraping",
+        "Beauty Acupuncture Package (10x)",
+        "Beauty Acupoint Package (10x)",
+        "Weight Loss Partial Body Massage 30 mins",
+        "Weight Loss Whole Body Massage 60 mins",
+        "Weight Loss Acupuncture",
+        "Abdominal Cupping Weight Loss",
+        "Thigh, Hips ( Bilateral ) Cupping Weight Loss",
+        "Loss Weight Acupuncture Package (10x)",
+        "Acupuncture 10X, Abdominal Cupping 10X, Free Clinic Fee",
+        "Acupuncture 10X + Thigh, Hips (Bilateral) ,Abdominal Cupping 10X, Free Clinic Fee"
     ]
 
     return render_template(
@@ -830,6 +858,7 @@ def appointment_event_counts():
 
     return jsonify(events)
 
+# =================== Login ===================
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
