@@ -31,6 +31,7 @@ translations = {
     'en': {
         'add_patient': 'Add Patient',
         'edit_patient': 'Edit Patient',
+        'confirm_delete_patient': 'Are you sure you want to delete this patient?',
         'delete_patient': 'Delete Patient',
         'full_name': 'Full Name',
         'nric': 'NRIC / ID',
@@ -104,6 +105,7 @@ translations = {
     'zh': {
         'add_patient': '添加病人',
         'edit_patient': '编辑病人',
+        'confirm_delete_patient': '确定要删除该病人吗？',
         'delete_patient': '删除病人',
         'full_name': '姓名',
         'nric': '身份证/编号',
