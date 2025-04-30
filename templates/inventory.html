@@ -1,20 +1,20 @@
 {% extends 'layout.html' %}
 {% block content %}
 
-<h4>Inventory Management</h4>
+<h4>{{ t('inventory_management') }}</h4>
 
 <!-- 🔍 Search Bar with Scan Button -->
 <form method="GET" action="/inventory" id="search-form" class="mb-4">
   <div class="input-group">
-    <input type="text" name="q" id="search-barcode" class="form-control" placeholder="Search by name or barcode..." value="{{ request.args.get('q', '') }}">
+    <input type="text" name="q" id="search-barcode" class="form-control" placeholder="{{ t('search_placeholder') }}" value="{{ request.args.get('q', '') }}">
     <button type="button" id="search-scan-btn" class="btn btn-outline-primary" onclick="toggleLiveScanner('search-barcode', 'search-form', this)">
-      <i class="bi bi-camera"></i> Scan
+      <i class="bi bi-camera"></i> {{ t('scan') }}
     </button>
   </div>
 </form>
 
-<!-- 📦 Inventory Table -->
-<a href="/inventory/add" class="btn btn-success mb-3">Add Medicine</a>
+<!-- 🛆 Inventory Table -->
+<a href="/inventory/add" class="btn btn-success mb-3">{{ t('add_medicine') }}</a>
 {% set grouped = {} %}
 {% for m in medicines %}
   {% set name = m.name %}
@@ -29,11 +29,11 @@
   <table class="table table-bordered">
     <thead>
       <tr>
-        <th>Barcode</th>
-        <th>Batch No.</th>
-        <th>Expiry</th>
-        <th>Stock</th>
-        <th>Actions</th>
+        <th>{{ t('barcode') }}</th>
+        <th>{{ t('batch_number') }}</th>
+        <th>{{ t('expiry_date') }}</th>
+        <th>{{ t('stock') }}</th>
+        <th>{{ t('actions') }}</th>
       </tr>
     </thead>
     <tbody>
@@ -50,11 +50,11 @@
           </form>
           <!-- Set Qty -->
           <form method="POST" action="/inventory/adjust/{{ m.id }}/set" class="d-inline ms-2">
-            <input type="number" name="new_stock" min="0" class="form-control d-inline-block" style="width: 80px;" placeholder="Qty" required>
-            <button class="btn btn-sm btn-success" type="submit">Save</button>
+            <input type="number" name="new_stock" min="0" class="form-control d-inline-block" style="width: 80px;" placeholder="{{ t('quantity') }}" required>
+            <button class="btn btn-sm btn-success" type="submit">{{ t('save_changes') }}</button>
           </form>
           <!-- Edit -->
-          <a href="/inventory/edit/{{ m.id }}" class="btn btn-sm btn-warning ms-2">Edit</a>
+          <a href="/inventory/edit/{{ m.id }}" class="btn btn-sm btn-warning ms-2">{{ t('edit') }}</a>
         </td>
       </tr>
       {% endfor %}
@@ -117,11 +117,11 @@
   function updateScanButton(scanning) {
     if (!activeScanButton) return;
     if (scanning) {
-      activeScanButton.innerHTML = '<i class="bi bi-stop-circle"></i> Stop Scanning';
+      activeScanButton.innerHTML = '<i class="bi bi-stop-circle"></i> {{ t('stop_scanning') }}';
       activeScanButton.classList.remove("btn-outline-primary");
       activeScanButton.classList.add("btn-outline-danger");
     } else {
-      activeScanButton.innerHTML = '<i class="bi bi-camera"></i> Scan';
+      activeScanButton.innerHTML = '<i class="bi bi-camera"></i> {{ t('scan') }}';
       activeScanButton.classList.remove("btn-outline-danger");
       activeScanButton.classList.add("btn-outline-primary");
       activeScanButton = null;
