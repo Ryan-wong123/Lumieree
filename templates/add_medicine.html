@@ -1,13 +1,13 @@
 {% extends 'layout.html' %}
 {% block content %}
 
-<h4>Add Medicine</h4>
+<h4>{{ t('add_medicine') }}</h4>
 
 <!-- 🔍 Live Scanner Preview -->
 <div id="scanner-wrapper" class="d-flex justify-content-center mb-3">
   <div class="text-center">
     <p id="scan-instruction" class="text-muted small mb-2" style="display: none;">
-      Point your camera at a barcode
+      {{ t('scan_instruction') if t('scan_instruction') != 'scan_instruction' else 'Point your camera at a barcode' }}
     </p>
     <div id="live-reader"
          class="rounded shadow border"
@@ -18,20 +18,22 @@
 
 <!-- 👨‍⚕️ Add Medicine Form -->
 <form method="POST">
-  <input name="name" class="form-control mb-2" placeholder="Name" required>
+  <input name="name" class="form-control mb-2" placeholder="{{ t('medicine_name') }}" required>
 
   <div class="input-group mb-2">
-    <input name="barcode" id="barcode_input" class="form-control" placeholder="Barcode" required>
-    <button type="button" class="btn btn-outline-primary" onclick="toggleLiveScanner('barcode_input', null, this)">📷 Scan</button>
+    <input name="barcode" id="barcode_input" class="form-control" placeholder="{{ t('barcode') }}" required>
+    <button type="button" class="btn btn-outline-primary" onclick="toggleLiveScanner('barcode_input', null, this)">
+      📷 {{ t('scan') if t('scan') != 'scan' else 'Scan' }}
+    </button>
   </div>
 
-  <input name="type" class="form-control mb-2" placeholder="Type" required>
-  <input name="price" class="form-control mb-2" placeholder="Price" required>
-  <input name="stock" class="form-control mb-2" placeholder="Stock" required>
-  <input name="dosage_info" class="form-control mb-2" placeholder="Dosage Info">
-  <input name="batch_number" class="form-control mb-2" placeholder="Batch Number">
+  <input name="type" class="form-control mb-2" placeholder="{{ t('type') }}" required>
+  <input name="price" class="form-control mb-2" placeholder="{{ t('price') }}" required>
+  <input name="stock" class="form-control mb-2" placeholder="{{ t('stock') }}" required>
+  <input name="dosage_info" class="form-control mb-2" placeholder="{{ t('dosage_info') }}">
+  <input name="batch_number" class="form-control mb-2" placeholder="{{ t('batch_number') }}">
   <input type="date" name="expiry_date" class="form-control mb-3">
-  <button class="btn btn-primary">Add Medicine</button>
+  <button class="btn btn-primary">{{ t('add_medicine') }}</button>
 </form>
 
 <!-- 📜 Scanner Script -->
@@ -94,7 +96,7 @@
       activeScanButton.classList.remove("btn-outline-primary");
       activeScanButton.classList.add("btn-outline-danger");
     } else {
-      activeScanButton.innerHTML = '<i class="bi bi-camera"></i> Scan';
+      activeScanButton.innerHTML = '<i class="bi bi-camera"></i> {{ t('scan') if t('scan') != 'scan' else 'Scan' }}';
       activeScanButton.classList.remove("btn-outline-danger");
       activeScanButton.classList.add("btn-outline-primary");
       activeScanButton = null;
