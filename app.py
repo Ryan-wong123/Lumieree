@@ -9,9 +9,9 @@ import io
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib import colors
 from collections import defaultdict
 import requests
-
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -443,27 +443,20 @@ def queue_receipt(queue_id):
 
 @app.route('/generate_receipt_pdf', methods=['POST'])
 def generate_receipt_pdf():
-    from flask import send_file, request
-    import io
-    from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
-    from datetime import datetime
-    import random
-
-    # Receive form data
     patient_name = request.form.get('patient_name', 'Patient')
+    visit_date = datetime.now().strftime("%d-%m-%Y")
+    bill_no = f"{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    # Prescribed Medicines
+    # Medicines
     medicine_count = int(request.form.get('medicine_count', 0))
     prescribed_medicines = []
     medicine_total = 0
-
     for i in range(1, medicine_count + 1):
         name = request.form.get(f'medicine_name_{i}')
         price = float(request.form.get(f'medicine_price_{i}', 0))
         qty = int(request.form.get(f'medicine_qty_{i}', 0))
         subtotal = price * qty
-        prescribed_medicines.append((name, price, qty, subtotal))
+        prescribed_medicines.append((name, qty, price, subtotal))
         medicine_total += subtotal
 
     # Services
@@ -480,71 +473,80 @@ def generate_receipt_pdf():
 
     grand_total = medicine_total + service_total
 
-    # --- Auto-generate Visit Date and Bill No ---
-    visit_date = datetime.now().strftime("%d-%m-%Y")  # e.g., 28-04-2025
-    bill_no = f"R{datetime.now().strftime('%Y%m%d%H%M%S')}"  # Unique based on date and time
-
-    # Generate PDF
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # --- Header ---
+    # Header
     p.setFont("Helvetica-Bold", 16)
-    p.drawCentredString(width/2, height-50, "春秋堂中医药诊所")
+    p.drawCentredString(width/2, height - 40, "春秋堂中医药诊所")
     p.setFont("Helvetica-Bold", 14)
-    p.drawCentredString(width/2, height-70, "Harmony TCM Healthcare")
+    p.drawCentredString(width/2, height - 60, "Harmony TCM Healthcare")
+    p.setFont("Helvetica", 9)
+    p.drawCentredString(width/2, height - 75, "Reg. No: 201223383")
     p.setFont("Helvetica", 10)
-    p.drawCentredString(width/2, height-90, "Blk 412 Bedok North Ave 2 #01-142 Singapore 460412    Tel: 9072 1288")
+    p.drawCentredString(width/2, height - 90, "Blk 412 Bedok North Ave 2 #01-142 Singapore 460412    Tel: 9072 1288")
 
-    # --- Title ---
     p.setFont("Helvetica-Bold", 18)
-    p.drawCentredString(width/2, height-130, "Receipt")
+    p.drawCentredString(width/2, height - 120, "Receipt")
 
-    # --- Patient Details ---
     p.setFont("Helvetica", 12)
-    p.drawString(50, height-170, f"To: {patient_name}")
-    p.drawString(50, height-190, f"Visit Date: {visit_date}")
-    p.drawString(50, height-210, f"Bill No: {bill_no}")
+    p.drawRightString(width - 50, height - 140, f"No. {bill_no[-5:]}")
 
-    # --- Prescribed Medicines Section ---
-    y = height-250
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(50, y, "Prescribed Medicines")
-    y -= 20
+    y = height - 170
+    p.setFont("Helvetica", 11)
+    p.drawString(50, y, f"To: {patient_name}")
+    p.drawString(50, y - 15, f"Visit Date: {visit_date}")
+    p.drawString(50, y - 30, f"Bill No.: {bill_no}")
+
+    y -= 70
+    row_height = 20
+    table_left = 50
+    table_right = width - 50
+    total_rows = len(prescribed_medicines) + len(services) + 2
+    table_height = total_rows * row_height
+
+    table_top = y
+    table_bottom = y - table_height
+
     p.setFont("Helvetica", 10)
-    for name, price, qty, subtotal in prescribed_medicines:
-        p.drawString(60, y, f"{name} ({qty}x @ ${price:.2f}) - ${subtotal:.2f}")
-        y -= 15
+    p.rect(table_left, table_bottom, table_right - table_left, table_height)
 
-    y -= 10
-    p.setFont("Helvetica-Bold", 10)
-    p.drawString(60, y, f"Subtotal (Medicines): ${medicine_total:.2f}")
-    y -= 30
+    p.setFont("Helvetica-Bold", 11)
+    p.line(table_left, table_top - row_height, table_right, table_top - row_height)
+    p.drawString(table_left + 10, table_top - 15, "Services Rendered")
+    p.drawRightString(table_right - 10, table_top - 15, "Amount (S$)")
 
-    # --- Services Rendered Section ---
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(50, y, "Services Rendered")
-    y -= 20
+    y_cursor = table_top - row_height
+
     p.setFont("Helvetica", 10)
-    for service_name, amount in services:
-        p.drawString(60, y, f"{service_name} - ${amount:.2f}")
-        y -= 15
+    for name, qty, price, subtotal in prescribed_medicines:
+        y_cursor -= row_height
+        p.line(table_left, y_cursor, table_right, y_cursor)
+        p.drawString(table_left + 10, y_cursor + 5, f"{name} ({qty}x @ ${price:.2f})")
+        p.drawRightString(table_right - 10, y_cursor + 5, f"{subtotal:.2f}")
 
-    y -= 10
+    for name, amount in services:
+        y_cursor -= row_height
+        p.line(table_left, y_cursor, table_right, y_cursor)
+        p.drawString(table_left + 10, y_cursor + 5, name)
+        p.drawRightString(table_right - 10, y_cursor + 5, f"{amount:.2f}")
+
+    y_cursor -= row_height
+    p.line(table_left, y_cursor, table_right, y_cursor)
     p.setFont("Helvetica-Bold", 10)
-    p.drawString(60, y, f"Subtotal (Services): ${service_total:.2f}")
-    y -= 30
+    p.drawString(table_left + 10, y_cursor + 5, "Total")
+    p.drawRightString(table_right - 10, y_cursor + 5, f"{grand_total:.2f}")
 
-    # --- Grand Total ---
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(50, y, f"Grand Total: ${grand_total:.2f}")
+    p.line(60, 60, 160, 60)
+    p.drawString(80, 45, "Date")
+    p.line(width - 200, 60, width - 100, 60)
+    p.drawString(width - 180, 45, "Physician's Signature")
 
     p.showPage()
     p.save()
     buffer.seek(0)
-
-    return send_file(buffer, as_attachment=True, download_name=f"{bill_no}.pdf", mimetype='application/pdf')
+    return send_file(buffer, as_attachment=True, download_name=f"Receipt_{bill_no}.pdf", mimetype='application/pdf')
 
 
 
