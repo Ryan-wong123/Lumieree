@@ -45,6 +45,14 @@
             <a class="nav-link {% if request.path.startswith('/settings') %}active{% endif %}"
               href="/settings">Settings</a>
           </li>
+          <li>
+            <form class="d-flex" method="POST" action="{{ url_for('switch_language') }}">
+              <input type="hidden" name="next" value="{{ request.path }}">
+              <button class="btn btn-outline-light" type="submit">
+                🌐 {{ '中文' if g.get('lang', 'en') == 'en' else 'English' }}
+              </button>
+            </form>  
+          </li>
         </ul>
       </div>
     </div>

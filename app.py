@@ -1,7 +1,7 @@
 # Flask TCM POS App — Full Scaffold with Routing, Templates, and Firebase
 # This will include inventory, patients, prescriptions, front desk queue, and receipt functionality.
 
-from flask import Flask, render_template, request, redirect, url_for, flash,Response,send_file,jsonify,session
+from flask import Flask, render_template, request, redirect, url_for, flash,Response,send_file,jsonify,session,g
 from firebase_admin import credentials, firestore, initialize_app, auth
 from datetime import datetime
 from PIL import Image
@@ -26,6 +26,44 @@ db = firestore.client()
 @app.route('/')
 def home():
     return redirect(url_for('patients'))
+
+translations = {
+    'en': {
+        'add_patient': 'Add Patient',
+        'contact': 'Contact',
+        'search': 'Search',
+        'inventory': 'Inventory',
+        'front_desk': 'Front Desk',
+        'receipt': 'Receipt',
+    },
+    'zh': {
+        'add_patient': '添加病人',
+        'contact': '联系方式',
+        'search': '搜索',
+        'inventory': '库存',
+        'front_desk': '前台',
+        'receipt': '收据',
+    }
+}
+
+@app.context_processor
+def inject_translation():
+    lang = g.get('lang', 'en')
+    return {
+        't': lambda key: translations[lang].get(key, key)
+    }
+
+
+@app.before_request
+def set_language():
+    g.lang = session.get('lang', 'en')
+
+@app.route('/switch_language', methods=['POST'])
+def switch_language():
+    current = session.get('lang', 'en')
+    session['lang'] = 'zh' if current == 'en' else 'en'
+    next_page = request.form.get('next') or url_for('home')
+    return redirect(next_page)
 
 # ================= Inventory =================
 @app.route('/api/medicines')
