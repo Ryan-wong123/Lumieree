@@ -1,17 +1,17 @@
 {% extends 'layout.html' %}
 {% block content %}
 
-<h4>Receipt for {{ patient.name }}</h4>
+<h4>{{ t('receipt_for') }} {{ patient.name }}</h4>
 
 <!-- Prescribed Medicines Section -->
-<h5>Prescribed Medicines</h5>
+<h5>{{ t('prescribed_meds') }}</h5>
 <table class="table table-bordered">
   <thead>
     <tr>
-      <th>Medicine</th>
-      <th>Unit Price ($)</th>
-      <th>Qty</th>
-      <th>Subtotal ($)</th>
+      <th>{{ t('medicine') }}</th>
+      <th>{{ t('unit_price') }}</th>
+      <th>{{ t('quantity') }}</th>
+      <th>{{ t('subtotal') }}</th>
     </tr>
   </thead>
   <tbody>
@@ -29,20 +29,18 @@
   </tbody>
   <tfoot>
     <tr>
-      <th colspan="3" class="text-end">Subtotal (Medicines):</th>
+      <th colspan="3" class="text-end">{{ t('subtotal_meds') }}</th>
       <th>${{ '%.2f' % total_medicine.value }}</th>
     </tr>
   </tfoot>
 </table>
 
 <!-- Services Rendered Section -->
-<h5 class="mt-4">Services Rendered</h5>
+<h5 class="mt-4">{{ t('services_rendered') }}</h5>
 
 <form id="servicesForm" method="POST" action="/generate_receipt_pdf">
-  <!-- Pass patient name -->
   <input type="hidden" name="patient_name" value="{{ patient.name }}">
 
-  <!-- Pass prescribed medicines as hidden fields -->
   {% for i in items %}
     <input type="hidden" name="medicine_name_{{ loop.index }}" value="{{ i.name }}">
     <input type="hidden" name="medicine_price_{{ loop.index }}" value="{{ i.unit_price }}">
@@ -50,16 +48,14 @@
   {% endfor %}
   <input type="hidden" name="medicine_count" value="{{ items|length }}">
 
-  <!-- Dynamic Services Table -->
   <table class="table table-bordered">
     <thead>
       <tr>
-        <th style="width: 10%;">Use</th>
-        <th style="width: 70%;">Service</th>
-        <th style="width: 20%;">Price ($)</th>
+        <th style="width: 10%;">{{ t('use') }}</th>
+        <th style="width: 70%;">{{ t('service') }}</th>
+        <th style="width: 20%;">{{ t('price') }}</th>
       </tr>
     </thead>
-    
     <tbody id="servicesTable">
       {% for service in services %}
       <tr>
@@ -69,27 +65,24 @@
       </tr>
       {% endfor %}
     </tbody>
-    
   </table>
 
-  <!-- Grand Total Section -->
   <table class="table">
     <tr>
-      <th class="text-end">Grand Total:</th>
+      <th class="text-end">{{ t('grand_total') }}</th>
       <th id="grandTotal">${{ '%.2f' % total_medicine.value }}</th>
     </tr>
   </table>
 
   <div class="text-end">
-    <button type="submit" class="btn btn-primary mt-3">Generate PDF Receipt</button>
+    <button type="submit" class="btn btn-primary mt-3">{{ t('generate_pdf') }}</button>
   </div>
 
   <div class="text-end mt-2">
-    <a href="/front_desk" class="btn btn-secondary mt-2">Back to Queue</a>
+    <a href="/front_desk" class="btn btn-secondary mt-2">{{ t('back_to_queue') }}</a>
   </div>
 </form>
 
-<!-- Live Update Grand Total Script -->
 <script>
   const medicineSubtotal = {{ '%.2f' % total_medicine.value }};
 
@@ -118,7 +111,6 @@
     el.addEventListener('input', updateGrandTotal);
   });
 
-  // Initialize correct total when page loads
   updateGrandTotal();
 </script>
 

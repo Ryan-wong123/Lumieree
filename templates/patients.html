@@ -3,20 +3,20 @@
 
 <form method="GET" class="mb-3">
   <div class="input-group">
-    <input type="text" class="form-control" name="q" placeholder="Search by name or contact..." value="{{ request.args.get('q', '') }}">
-    <button class="btn btn-outline-secondary" type="submit">Search</button>
+    <input type="text" class="form-control" name="q" placeholder="{{ t('search_patient_placeholder') }}" value="{{ request.args.get('q', '') }}">
+    <button class="btn btn-outline-secondary" type="submit">{{ t('search') }}</button>
   </div>
 </form>
 
-<a href="/patients/add" class="btn btn-success mb-3">Add Patient</a>
+<a href="/patients/add" class="btn btn-success mb-3">{{ t('add_patient') }}</a>
 
 <table class="table table-hover align-middle">
   <thead class="table-light">
     <tr>
-      <th>Name</th>
-      <th>Contact</th>
-      <th>Visits</th>
-      <th>Actions</th>
+      <th>{{ t('full_name') }}</th>
+      <th>{{ t('contact') }}</th>
+      <th>{{ t('visits') }}</th>
+      <th>{{ t('actions') }}</th>
     </tr>
   </thead>
   <tbody>
@@ -26,12 +26,12 @@
       <td>{{ p.contact }}</td>
       <td>{{ p.visit_count }}</td>
       <td>
-        <a href="/patients/edit/{{ p.id }}" class="btn btn-sm btn-outline-primary">Edit</a>
-        <a href="/patients/{{ p.id }}/visits" class="btn btn-sm btn-outline-secondary">Visits</a>
+        <a href="/patients/edit/{{ p.id }}" class="btn btn-sm btn-outline-primary">{{ t('edit') }}</a>
+        <a href="/patients/{{ p.id }}/visits" class="btn btn-sm btn-outline-secondary">{{ t('visits') }}</a>
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="4" class="text-center text-muted">No patients found.</td></tr>
+    <tr><td colspan="4" class="text-center text-muted">{{ t('no_patients_found') }}</td></tr>
     {% endfor %}
   </tbody>
 </table>

@@ -5,20 +5,20 @@
 <div class="card mb-4">
   <div class="card-body">
     <h4 class="card-title">{{ patient.name }}</h4>
-    <p><strong>NRIC:</strong> {{ patient.nric }}</p>
-    <p><strong>Contact:</strong> {{ patient.contact }}</p>
-    <p><strong>Address:</strong> {{ patient.address }}</p>
-    <p><strong>Email:</strong> {{ patient.email }}</p>
-    <p><strong>Date of Birth:</strong> {{ patient.dob }}</p>
-    <p><strong>Gender:</strong> {{ patient.gender }}</p>
-    <p><strong>Medical Conditions:</strong>
+    <p><strong>{{ t('nric') }}:</strong> {{ patient.nric }}</p>
+    <p><strong>{{ t('contact') }}:</strong> {{ patient.contact }}</p>
+    <p><strong>{{ t('address') }}:</strong> {{ patient.address }}</p>
+    <p><strong>{{ t('email') }}:</strong> {{ patient.email }}</p>
+    <p><strong>{{ t('dob') }}:</strong> {{ patient.dob }}</p>
+    <p><strong>{{ t('gender') }}:</strong> {{ patient.gender }}</p>
+    <p><strong>{{ t('medical_conditions') }}:</strong>
       {% for condition in ['diabetes', 'hypertension', 'heart_disease', 'asthma', 'stroke', 'kidney_disease'] %}
         {% if patient.get(condition) == 'Yes' %}
-          <span class="badge bg-success">{{ condition.replace('_', ' ').title() }}</span>
+          <span class="badge bg-success">{{ t(condition) }}</span>
         {% endif %}
       {% endfor %}
       {% if patient.other_conditions %}
-        <span class="badge bg-info">Other: {{ patient.other_conditions }}</span>
+        <span class="badge bg-info">{{ t('other_conditions') }}: {{ patient.other_conditions }}</span>
       {% endif %}
     </p>
   </div>
@@ -27,7 +27,7 @@
 <!-- New Visit Form -->
 <div class="card mb-4">
   <div class="card-body">
-    <h5 class="card-title">Add New Visit</h5>
+    <h5 class="card-title">{{ t('add_new_visit') }}</h5>
 
     <form method="POST" class="row g-3">
       <div class="col-md-4">
@@ -35,21 +35,21 @@
       </div>
 
       <div class="col-md-12">
-        <label class="form-label">Condition</label>
-        <textarea name="condition" class="form-control form-control-lg" rows="7" placeholder="Describe patient's condition..." required>{{ draft.condition if draft else '' }}</textarea>
+        <label class="form-label">{{ t('condition') }}</label>
+        <textarea name="condition" class="form-control form-control-lg" rows="7" placeholder="{{ t('condition_placeholder') }}" required>{{ draft.condition if draft else '' }}</textarea>
       </div>
 
       <!-- Prescribed Medications (Table Style) -->
       <div class="col-md-12">
-        <label class="form-label">Prescribed Medications</label>
+        <label class="form-label">{{ t('prescribed_meds') }}</label>
         <div class="table-responsive">
           <table class="table table-bordered" id="prescription-table">
             <thead class="table-light">
               <tr>
-                <th>Medicine Name</th>
-                <th>Quantity</th>
-                <th>Dosage</th>
-                <th>Action</th>
+                <th>{{ t('medicine_name') }}</th>
+                <th>{{ t('quantity') }}</th>
+                <th>{{ t('dosage') }}</th>
+                <th>{{ t('action') }}</th>
               </tr>
             </thead>
             <tbody id="prescription-list">
@@ -61,27 +61,27 @@
       </div>
 
       <div class="col-md-12">
-        <label class="form-label">Overall Notes</label>
-        <textarea name="notes" class="form-control" rows="3" placeholder="Visit notes...">{{ draft.notes if draft else '' }}</textarea>
+        <label class="form-label">{{ t('overall_notes') }}</label>
+        <textarea name="notes" class="form-control" rows="3" placeholder="{{ t('notes_placeholder') }}">{{ draft.notes if draft else '' }}</textarea>
       </div>
 
       <div class="col-12 d-flex gap-2">
-        <button type="submit" name="action" value="save_draft" class="btn btn-warning w-50">Save Draft</button>
-        <button type="submit" name="action" value="confirm" class="btn btn-success w-50">Confirm Visit</button>
+        <button type="submit" name="action" value="save_draft" class="btn btn-warning w-50">{{ t('save_draft') }}</button>
+        <button type="submit" name="action" value="confirm" class="btn btn-success w-50">{{ t('confirm_visit') }}</button>
       </div>
     </form>
   </div>
 </div>
 
 <!-- Past Visit Records -->
-<h5>Past Visits</h5>
+<h5>{{ t('past_visits') }}</h5>
 <table class="table table-striped">
   <thead class="table-light">
     <tr>
-      <th>Date</th>
-      <th>Condition</th>
-      <th>Medications</th>
-      <th>Notes</th>
+      <th>{{ t('date') }}</th>
+      <th>{{ t('condition') }}</th>
+      <th>{{ t('medications') }}</th>
+      <th>{{ t('notes') }}</th>
     </tr>
   </thead>
   <tbody>
@@ -98,7 +98,7 @@
     </tr>
     {% else %}
     <tr>
-      <td colspan="4" class="text-center text-muted">No visit history yet.</td>
+      <td colspan="4" class="text-center text-muted">{{ t('no_visit_history') }}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -111,27 +111,27 @@
   {% else %}
   const draftMeds = [];
   {% endif %}
-  
+
   function addMedicineRow(prefill = null) {
     const tbody = document.getElementById("prescription-list");
     const tr = document.createElement("tr");
-  
+
     tr.innerHTML = `
-      <td><input list="med-list" name="med_name" class="form-control" placeholder="Medicine Name" required></td>
+      <td><input list="med-list" name="med_name" class="form-control" placeholder="{{ t('medicine_name') }}" required></td>
       <td><input type="number" name="med_quantity" class="form-control" min="1" value="1" required></td>
       <td><input name="med_dosage" class="form-control" placeholder="e.g. 2x daily" required></td>
       <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">×</button></td>
     `;
-  
+
     tbody.appendChild(tr);
-  
+
     if (prefill) {
       tr.querySelector('[name="med_name"]').value = prefill.name;
       tr.querySelector('[name="med_quantity"]').value = prefill.quantity;
       tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
     }
   }
-  
+
   window.addEventListener('DOMContentLoaded', function() {
     if (draftMeds.length > 0) {
       draftMeds.forEach(med => {
@@ -141,12 +141,8 @@
       addMedicineRow();
     }
   });
-  </script>
-  
-  
-  
-  
-  
+</script>
+
 <!-- Autocomplete support -->
 <datalist id="med-list">
   {% for name in medicine_names %}

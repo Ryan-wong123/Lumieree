@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ g.get('lang', 'en') }}">
 
 <head>
   <meta charset="UTF-8">
@@ -23,27 +23,35 @@
         <ul class="navbar-nav me-auto">
           <li class="nav-item">
             <a class="nav-link {% if request.path.startswith('/appointments') %}active{% endif %}"
-              href="/appointments">Appointment</a>
+              href="/appointments">{{ t('appointment') }}</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if request.path.startswith('/patients') %}active{% endif %}"
-              href="/patients">Patients</a>
+              href="/patients">{{ t('patients') }}</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if request.path.startswith('/inventory') %}active{% endif %}"
-              href="/inventory">Inventory</a>
+              href="/inventory">{{ t('inventory') }}</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if request.path.startswith('/front_desk') %}active{% endif %}"
-              href="/front_desk">Front Desk</a>
+              href="/front_desk">{{ t('front_desk') }}</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.path.startswith('/inventory') %}active{% endif %}"
-              href="/admin/dashboard">Admin</a>
+            <a class="nav-link {% if request.path.startswith('/admin') %}active{% endif %}"
+              href="/admin/dashboard">{{ t('admin') }}</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if request.path.startswith('/settings') %}active{% endif %}"
-              href="/settings">Settings</a>
+              href="/settings">{{ t('settings') }}</a>
+          </li>
+          <li>
+            <form class="d-flex" method="POST" action="{{ url_for('switch_language') }}">
+              <input type="hidden" name="next" value="{{ request.path }}">
+              <button class="btn btn-outline-light" type="submit">
+                🌐 {{ '中文' if g.get('lang', 'en') == 'en' else 'English' }}
+              </button>
+            </form>  
           </li>
         </ul>
       </div>
