@@ -1,12 +1,12 @@
 {% extends 'layout.html' %}
 {% block content %}
-<h4>Doctor Appointment Calendar</h4>
+<h4>{{ t('doctor_appointment_calendar') }}</h4>
 
 <!-- Booking Legend -->
 <div class="mb-2">
-  <span class="badge bg-success">1–2 bookings</span>
-  <span class="badge bg-warning text-dark">3–5 bookings</span>
-  <span class="badge bg-danger">6+ bookings</span>
+  <span class="badge bg-success">1–2 {{ t('appointments') }}</span>
+  <span class="badge bg-warning text-dark">3–5 {{ t('appointments') }}</span>
+  <span class="badge bg-danger">6+ {{ t('appointments') }}</span>
 </div>
 
 <!-- FullCalendar Display -->
@@ -19,12 +19,12 @@
   <table class="table table-bordered table-sm text-center align-middle mt-4" id="appointmentTable">
     <thead class="table-light">
       <tr>
-        <th>Patient Name</th>
-        <th>Contact</th>
+        <th>{{ t('patient_name') }}</th>
+        <th>{{ t('contact') }}</th>
         {% for hour in range(9, 18) %}
         <th>{{ "%02d:00" % hour }} - {{ "%02d:00" % (hour + 1) }}</th>
         {% endfor %}
-        <th>Cancel</th>
+        <th>{{ t('cancel') }}</th>
       </tr>
     </thead>
     <tbody id="appointmentBody">
@@ -45,21 +45,22 @@
       {% endfor %}
     </tbody>
   </table>
-  
 
-  <button type="button" class="btn btn-outline-primary" onclick="addRow()">+ Add Patient</button>
-  <button type="submit" class="btn btn-success mt-3">Save Appointments</button>
+  <button type="button" class="btn btn-outline-primary" onclick="addRow()">+ {{ t('add_patient') }}</button>
+  <button type="submit" class="btn btn-success mt-3">{{ t('save_appointments') }}</button>
 </form>
 
 <!-- FullCalendar CSS + JS -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/locales-all.min.js"></script>
 
 <script>
   let calendar;
   document.addEventListener('DOMContentLoaded', function () {
     calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
       initialView: 'dayGridMonth',
+      locale: "{{ g.lang }}",
       dateClick: function (info) {
         fetch(`/appointments/json?date=${info.dateStr}`)
           .then(res => res.json())
@@ -74,9 +75,9 @@
     });
     calendar.render();
   });
-  
+
   let rowCount = {{ patients|length }} + 1;
-  
+
   function addRow() {
     const tbody = document.getElementById('appointmentBody');
     let rowHTML = `<tr>
@@ -85,16 +86,16 @@
     for (let hour = 9; hour < 18; hour++) {
       rowHTML += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}"></td>`;
     }
-    rowHTML += `<td></td></tr>`; // empty cancel column for unsaved
+    rowHTML += `<td></td></tr>`;
     tbody.insertAdjacentHTML('beforeend', rowHTML);
     rowCount++;
   }
-  
+
   function updateTable(data) {
     const tbody = document.getElementById('appointmentBody');
     tbody.innerHTML = '';
     rowCount = 1;
-  
+
     for (const entry of data.patients) {
       let row = `<tr>
         <td><input type="text" class="form-control" name="patient_name_${rowCount}" value="${entry.name}"></td>
@@ -109,7 +110,7 @@
       rowCount++;
     }
   }
-  
+
   function cancelAppointment(button, patientName) {
     const date = document.getElementById("selectedDate").value;
     if (!confirm(`Cancel appointment for ${patientName} on ${date}?`)) return;
@@ -121,13 +122,11 @@
     }).then(res => {
       if (res.status === 204) {
         button.closest('tr').remove();
-        calendar.refetchEvents();  // ✅ auto-refresh event colors
+        calendar.refetchEvents();
       } else {
         alert("Failed to cancel appointment.");
       }
     });
   }
-  </script>
-  
-
+</script>
 {% endblock %}
