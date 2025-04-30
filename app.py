@@ -75,6 +75,7 @@ translations = {
         'condition': 'Condition',
         'notes': 'Notes',
         'condition_placeholder': "Describe patient's condition...",
+        'receipt_for': 'Receipt for',
         'prescribed_meds': 'Prescribed Medications',
         'medicine_name': 'Medicine Name',
         'inventory_management': 'Inventory Management',
@@ -121,6 +122,15 @@ translations = {
         'password': 'Password',
         'submit': 'Submit',
         'dashboard': 'Dashboard',
+        'medicine': 'Medicine',
+        'unit_price': 'Unit Price ($)', 'subtotal': 'Subtotal ($)',
+        'subtotal': 'Subtotal ($)',
+        'subtotal_meds': 'Subtotal (Medicines):',
+        'use': 'Use',
+        'service': 'Service',
+        'grand_total': 'Grand Total:',
+        'generate_pdf': 'Generate PDF Receipt',
+        'back_to_queue': 'Back to Queue'
     },
     'zh': {
         'add_patient': '添加病人',
@@ -215,6 +225,16 @@ translations = {
         'password': '密码',
         'submit': '提交',
         'dashboard': '仪表盘',
+        'receipt_for': '收据 - ',
+        'medicine': '药品',
+        'unit_price': '单价（$）',
+        'subtotal': '小计（$）',
+        'subtotal_meds': '药品小计：',
+        'use': '使用',
+        'service': '服务名称',
+        'grand_total': '总计：',
+        'generate_pdf': '生成 PDF 收据',
+        'back_to_queue': '返回队列'
     }
 }
 
