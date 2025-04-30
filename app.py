@@ -134,7 +134,20 @@ translations = {
         'account_settings': 'Account Settings',
         'new_email': 'New Email',
         'new_password': 'New Password',
-        'update_account': 'Update Account'
+        'update_account': 'Update Account',
+        'admin_dashboard': 'Admin Dashboard',
+        'total_patients': 'Total Patients',
+        'visits_today': 'Visits Today',
+        'prescriptions_created': 'Prescriptions Created',
+        'low_stock_medicines': 'Low Stock Medicines',
+        'stock_healthy': 'All stock levels are healthy ✅',
+        'no_visits_today': 'No visits logged today.',
+        'recent_completed_orders': 'Recently Completed Orders',
+        'items': 'Items',
+        'time': 'Time',
+        'no_completed_orders': 'No completed items in queue.',
+        'export_visits_csv': 'Export Visits CSV',
+        'export_prescriptions_csv': 'Export Prescriptions CSV'
     },
     'zh': {
         'add_patient': '添加病人',
@@ -242,7 +255,20 @@ translations = {
         'account_settings': '账户设置',
         'new_email': '新电子邮件',
         'new_password': '新密码',
-        'update_account': '更新账户'
+        'update_account': '更新账户',
+        'admin_dashboard': '管理员仪表盘',
+        'total_patients': '病人总数',
+        'visits_today': '今日就诊',
+        'prescriptions_created': '已创建处方',
+        'low_stock_medicines': '库存不足药品',
+        'stock_healthy': '库存充足 ✅',
+        'no_visits_today': '今天没有就诊记录。',
+        'recent_completed_orders': '最近完成的订单',
+        'items': '项目',
+        'time': '时间',
+        'no_completed_orders': '队列中暂无完成项目。',
+        'export_visits_csv': '导出就诊 CSV',
+        'export_prescriptions_csv': '导出处方 CSV'
     }
 }
 

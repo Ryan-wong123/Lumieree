@@ -1,13 +1,13 @@
 {% extends 'layout.html' %}
 {% block content %}
-<h4>Admin Dashboard</h4>
+<h4>{{ t('admin_dashboard') }}</h4>
 
 <!-- 🔢 KPI Cards -->
 <div class="row mb-4">
     <div class="col">
         <div class="card">
             <div class="card-body text-center">
-                <h6>Total Patients</h6>
+                <h6>{{ t('total_patients') }}</h6>
                 <p class="fs-3">{{ total_patients }}</p>
             </div>
         </div>
@@ -15,7 +15,7 @@
     <div class="col">
         <div class="card">
             <div class="card-body text-center">
-                <h6>Visits Today</h6>
+                <h6>{{ t('visits_today') }}</h6>
                 <p class="fs-3">{{ daily_visits }}</p>
             </div>
         </div>
@@ -23,7 +23,7 @@
     <div class="col">
         <div class="card">
             <div class="card-body text-center">
-                <h6>Prescriptions Created</h6>
+                <h6>{{ t('prescriptions_created') }}</h6>
                 <p class="fs-3">{{ total_prescriptions }}</p>
             </div>
         </div>
@@ -31,15 +31,15 @@
 </div>
 
 <!-- ⚠️ Low Stock Alerts -->
-<h5>📦 Low Stock Medicines</h5>
+<h5>🛆 {{ t('low_stock_medicines') }}</h5>
 {% if low_stock %}
 <table class="table table-sm table-bordered">
     <thead class="table-light">
         <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Stock</th>
-            <th>Expiry</th>
+            <th>{{ t('name') }}</th>
+            <th>{{ t('type') }}</th>
+            <th>{{ t('stock') }}</th>
+            <th>{{ t('expiry') }}</th>
         </tr>
     </thead>
     <tbody>
@@ -54,18 +54,18 @@
     </tbody>
 </table>
 {% else %}
-<p class="text-muted">All stock levels are healthy ✅</p>
+<p class="text-muted">{{ t('stock_healthy') }}</p>
 {% endif %}
 
-<!-- 🗓️ Visits Today -->
-<h5 class="mt-4">🧑‍⚕️ Visits Today</h5>
+<!-- 🧑‍⚕️ Visits Today -->
+<h5 class="mt-4">🧑‍⚕️ {{ t('visits_today') }}</h5>
 {% if today_visits %}
 <table class="table table-sm table-hover">
     <thead class="table-light">
         <tr>
-            <th>Patient</th>
-            <th>Condition</th>
-            <th>Date</th>
+            <th>{{ t('patient') }}</th>
+            <th>{{ t('condition') }}</th>
+            <th>{{ t('date') }}</th>
         </tr>
     </thead>
     <tbody>
@@ -79,26 +79,26 @@
     </tbody>
 </table>
 {% else %}
-<p class="text-muted">No visits logged today.</p>
+<p class="text-muted">{{ t('no_visits_today') }}</p>
 {% endif %}
 
 <!-- ✅ Completed Orders -->
-<h5 class="mt-4">🧾 Recently Completed Orders</h5>
+<h5 class="mt-4">🧞 {{ t('recent_completed_orders') }}</h5>
 {% if recent_completed %}
 <table class="table table-sm table-bordered">
     <thead class="table-light">
         <tr>
-            <th>Patient</th>
-            <th>Status</th>
-            <th>Items</th>
-            <th>Time</th>
+            <th>{{ t('patient') }}</th>
+            <th>{{ t('status') }}</th>
+            <th>{{ t('items') }}</th>
+            <th>{{ t('time') }}</th>
         </tr>
     </thead>
     <tbody>
         {% for q in recent_completed %}
         <tr>
             <td>{{ q.patient_name }}</td>
-            <td><span class="badge bg-success">{{ q.status }}</span></td>
+            <td><span class="badge bg-success">{{ t(q.status) }}</span></td>
             <td>
                 <ul class="mb-0 small">
                     {% for i in q["items"] %}
@@ -112,13 +112,12 @@
     </tbody>
 </table>
 {% else %}
-<p class="text-muted">No completed items in queue.</p>
+<p class="text-muted">{{ t('no_completed_orders') }}</p>
 {% endif %}
 
 <div class="mb-3">
-    <a href="/admin/export/visits.csv" class="btn btn-outline-primary btn-sm">⬇ Export Visits CSV</a>
-    <a href="/admin/export/queue.csv" class="btn btn-outline-secondary btn-sm">⬇ Export Prescriptions CSV</a>
+    <a href="/admin/export/visits.csv" class="btn btn-outline-primary btn-sm">⬇ {{ t('export_visits_csv') }}</a>
+    <a href="/admin/export/queue.csv" class="btn btn-outline-secondary btn-sm">⬇ {{ t('export_prescriptions_csv') }}</a>
 </div>
-
 
 {% endblock %}
