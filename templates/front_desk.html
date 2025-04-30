@@ -1,15 +1,15 @@
 {% extends 'layout.html' %}
 {% block content %}
 
-<h4>Front Desk Prescription Queue</h4>
+<h4>{{ t('front_desk_queue') }}</h4>
 
 <!-- Tab Navigation -->
 <ul class="nav nav-tabs mb-3" id="queueTabs" role="tablist">
   <li class="nav-item">
-    <button class="nav-link active" id="waiting-tab" data-bs-toggle="tab" data-bs-target="#waiting" type="button" role="tab">Waiting</button>
+    <button class="nav-link active" id="waiting-tab" data-bs-toggle="tab" data-bs-target="#waiting" type="button" role="tab">{{ t('waiting') }}</button>
   </li>
   <li class="nav-item">
-    <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button" role="tab">Completed</button>
+    <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button" role="tab">{{ t('completed') }}</button>
   </li>
 </ul>
 
@@ -22,17 +22,17 @@
     <div class="card mb-3">
       <div class="card-body">
         <h5>{{ item.patient_name }}</h5>
-        <p>Status: {{ item.status }}</p>
+        <p>{{ t('status') }}: {{ t(item.status) }}</p>
         <ul>
           {% for i in item["items"] %}
           <li>{{ i.quantity }}x {{ i.name }}</li>
           {% endfor %}
         </ul>
-        <a href="/front_desk/update/{{ item.id }}/completed" class="btn btn-success btn-sm">Mark Completed</a>
+        <a href="/front_desk/update/{{ item.id }}/completed" class="btn btn-success btn-sm">{{ t('mark_completed') }}</a>
       </div>
     </div>
     {% else %}
-    <p class="text-muted">No waiting items.</p>
+    <p class="text-muted">{{ t('no_waiting_items') }}</p>
     {% endfor %}
   </div>
 
@@ -43,19 +43,19 @@
       <div class="card-body">
         <h5>
           {{ item.patient_name }}
-          {% if "Unknown" in item.patient_name %}<span class="badge bg-danger">Deleted</span>{% endif %}
+          {% if "Unknown" in item.patient_name %}<span class="badge bg-danger">{{ t('deleted') }}</span>{% endif %}
         </h5>
-        <p>Status: {{ item.status }}</p>
+        <p>{{ t('status') }}: {{ t(item.status) }}</p>
         <ul>
           {% for i in item["items"] %}
           <li>{{ i.quantity }}x {{ i.name }}</li>
           {% endfor %}
         </ul>
-        <a href="/front_desk/update/{{ item.id }}/void" class="btn btn-danger btn-sm">Void</a>
+        <a href="/front_desk/update/{{ item.id }}/void" class="btn btn-danger btn-sm">{{ t('void') }}</a>
       </div>
     </div>
     {% else %}
-    <p class="text-muted">No completed items.</p>
+    <p class="text-muted">{{ t('no_completed_items') }}</p>
     {% endfor %}
   </div>
 
