@@ -130,7 +130,11 @@ translations = {
         'service': 'Service',
         'grand_total': 'Grand Total:',
         'generate_pdf': 'Generate PDF Receipt',
-        'back_to_queue': 'Back to Queue'
+        'back_to_queue': 'Back to Queue',
+        'account_settings': 'Account Settings',
+        'new_email': 'New Email',
+        'new_password': 'New Password',
+        'update_account': 'Update Account'
     },
     'zh': {
         'add_patient': '添加病人',
@@ -234,7 +238,11 @@ translations = {
         'service': '服务名称',
         'grand_total': '总计：',
         'generate_pdf': '生成 PDF 收据',
-        'back_to_queue': '返回队列'
+        'back_to_queue': '返回队列',
+        'account_settings': '账户设置',
+        'new_email': '新电子邮件',
+        'new_password': '新密码',
+        'update_account': '更新账户'
     }
 }
 
