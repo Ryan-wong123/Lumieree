@@ -69,6 +69,12 @@
     <textarea name="other_conditions" class="form-control" placeholder="E.g., cancer, thyroid disorder, etc."></textarea>
   </div>
 
+  <!-- Drug Allergies -->
+  <div class="mb-3">
+    <label class="form-label">{{ t('drug_allergies') }}</label>
+    <textarea name="drug_allergies" class="form-control" placeholder="E.g., penicillin, aspirin, etc."></textarea>
+  </div>
+
   <button class="btn btn-primary w-100">{{ t('add_patient') }}</button>
 </form>
 
@@ -82,7 +88,6 @@
     function toggleDuration() {
       const show = yesRadio.checked;
       group.style.display = show ? 'block' : 'none';
-      // Make duration required only when "Yes"
       if (show) {
         input.setAttribute('required', 'required');
       } else {
@@ -91,12 +96,9 @@
       }
     }
 
-    // Bind events
     yesRadio.addEventListener('change', toggleDuration);
     noRadio.addEventListener('change', toggleDuration);
-
-    // Initial state (covers back/forward navigation)
-    toggleDuration();
+    toggleDuration(); // initial
   });
 </script>
 {% endblock %}

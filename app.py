@@ -149,8 +149,8 @@ translations = {
         'export_visits_csv': 'Export Visits CSV',
         'export_prescriptions_csv': 'Export Prescriptions CSV',
         'taking_western_medicine': 'Taking Western Medicine',
-        'western_medicine_duration': 'How long taking Western Medicine'
-
+        'western_medicine_duration': 'How long taking Western Medicine',
+        'drug_allergies': 'Drug Allergies',
     },
     'zh': {
         'add_patient': '添加病人',
@@ -273,7 +273,8 @@ translations = {
         'export_visits_csv': '导出就诊 CSV',
         'export_prescriptions_csv': '导出处方 CSV',
         'taking_western_medicine': '是否服用西药',
-        'western_medicine_duration': '服用西药多久'
+        'western_medicine_duration': '服用西药多久',
+        'drug_allergies': '药物过敏'
 
     }
 }

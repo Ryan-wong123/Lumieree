@@ -84,6 +84,12 @@
     <textarea name="other_conditions" class="form-control">{{ patient.other_conditions }}</textarea>
   </div>
 
+  <!-- Drug Allergies -->
+  <div class="mb-3">
+    <label class="form-label">{{ t('drug_allergies') }}</label>
+    <textarea name="drug_allergies" class="form-control" placeholder="E.g., penicillin, aspirin, etc.">{{ patient.drug_allergies }}</textarea>
+  </div>
+
   <div class="d-flex justify-content-between">
     <button type="submit" class="btn btn-primary">{{ t('save_changes') }}</button>
   </div>
@@ -107,17 +113,13 @@
         input.setAttribute('required', 'required');
       } else {
         input.removeAttribute('required');
-        // Optional: clear when hidden
-        // input.value = '';
+        // input.value = ''; // optional clear
       }
     }
 
-    // Bind events
     yesRadio.addEventListener('change', toggleDuration);
     noRadio.addEventListener('change', toggleDuration);
-
-    // Initial state from existing record
-    toggleDuration();
+    toggleDuration(); // initial (prefill state)
   });
 </script>
 {% endblock %}
