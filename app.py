@@ -1046,7 +1046,7 @@ def save_appointments():
         patient_name = form.get(f"patient_name_{row_num}")
         contact = form.get(f"contact_{row_num}", "")
         slots = {}
-        for hour in range(9, 18):
+        for hour in range(10, 21):
             slot_value = form.get(f"slot_{row_num}_{hour}", "")
             slots[str(hour)] = slot_value
 
