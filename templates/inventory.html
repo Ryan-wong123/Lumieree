@@ -27,39 +27,38 @@
 {% for name, batch_list in grouped.items() %}
   <h5 class="mt-4">{{ name }}</h5>
   <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>{{ t('barcode') }}</th>
-        <th>{{ t('batch_number') }}</th>
-        <th>{{ t('expiry_date') }}</th>
-        <th>{{ t('stock') }}</th>
-        <th>{{ t('actions') }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in batch_list %}
-      <tr>
-        <td>{{ m.barcode }}</td>
-        <td>{{ m.batch_number }}</td>
-        <td>{{ m.expiry_date }}</td>
-        <td>{{ m.stock }}</td>
-        <td>
-          <!-- +1 -->
-          <form method="POST" action="/inventory/adjust/{{ m.id }}/increase" class="d-inline">
-            <button class="btn btn-sm btn-primary" type="submit">+1</button>
-          </form>
-          <!-- Set Qty -->
-          <form method="POST" action="/inventory/adjust/{{ m.id }}/set" class="d-inline ms-2">
-            <input type="number" name="new_stock" min="0" class="form-control d-inline-block" style="width: 80px;" placeholder="{{ t('quantity') }}" required>
-            <button class="btn btn-sm btn-success" type="submit">{{ t('save_changes') }}</button>
-          </form>
-          <!-- Edit -->
-          <a href="/inventory/edit/{{ m.id }}" class="btn btn-sm btn-warning ms-2">{{ t('edit') }}</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <thead>
+    <tr>
+      <th>{{ t('expiry_date') }}</th>
+      <th>{{ t('stock') }}</th>
+      <th>{{ t('price') }}</th>
+      <th>{{ t('actions') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in batch_list %}
+    <tr>
+      <td>{{ m.expiry_date }}</td>
+      <td>{{ m.stock }}</td>
+      <td>${{ m.price }}</td>
+      <td>
+        <!-- +1 -->
+        <form method="POST" action="/inventory/adjust/{{ m.id }}/increase" class="d-inline">
+          <button class="btn btn-sm btn-primary" type="submit">+1</button>
+        </form>
+        <!-- Set Qty -->
+        <form method="POST" action="/inventory/adjust/{{ m.id }}/set" class="d-inline ms-2">
+          <input type="number" name="new_stock" min="0" class="form-control d-inline-block" style="width: 80px;" placeholder="{{ t('quantity') }}" required>
+          <button class="btn btn-sm btn-success" type="submit">{{ t('save_changes') }}</button>
+        </form>
+        <!-- Edit -->
+        <a href="/inventory/edit/{{ m.id }}" class="btn btn-sm btn-warning ms-2">{{ t('edit') }}</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
 {% endfor %}
 
 <!-- 🔁 Reusable Scanner Script -->
@@ -140,7 +139,6 @@
   }
 </script>
 
-<!-- Bootstrap Icons -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 
 {% endblock %}

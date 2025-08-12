@@ -4,13 +4,9 @@
 
 <form method="POST">
   <input name="name" value="{{ medicine.name }}" class="form-control mb-2" placeholder="{{ t('medicine_name') }}" required>
-  <input name="barcode" value="{{ medicine.barcode }}" class="form-control mb-2" placeholder="{{ t('barcode') }}" required>
-  <input name="type" value="{{ medicine.type }}" class="form-control mb-2" placeholder="{{ t('type') }}" required>
   <input name="price" type="number" step="0.01" value="{{ medicine.price }}" class="form-control mb-2" placeholder="{{ t('price') }}" required>
-  <input name="stock" type="number" value="{{ medicine.stock }}" class="form-control mb-2" placeholder="{{ t('stock') }}" required>
-  <input name="dosage_info" value="{{ medicine.dosage_info }}" class="form-control mb-2" placeholder="{{ t('dosage_info') }}">
-  <input type="date" name="expiry_date" value="{{ medicine.expiry_date }}" class="form-control mb-3">
-  <input name="batch_number" value="{{ medicine.batch_number or '' }}" class="form-control mb-2" placeholder="{{ t('batch_number') }}">
+  <input name="stock" type="number" value="{{ medicine.stock }}" class="form-control mb-2" placeholder="{{ t('quantity') }}" required>
+  <input type="date" name="expiry_date" value="{{ medicine.expiry_date }}" class="form-control mb-3" required>
 
   <button class="btn btn-primary">{{ t('save_changes') }}</button>  
 </form>

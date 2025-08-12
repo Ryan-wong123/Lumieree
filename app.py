@@ -332,7 +332,6 @@ def add_medicine():
         data['price'] = float(data['price'])
         data['stock'] = int(data['stock'])
         data['expiry_date'] = data['expiry_date']
-        data['batch_number'] = request.form.get('batch_number', '')
         db.collection('medicines').add(data)
         flash('Medicine added successfully!')
         return redirect(url_for('inventory'))
