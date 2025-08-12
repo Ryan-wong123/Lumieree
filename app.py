@@ -1129,10 +1129,10 @@ def appointment_event_counts():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
+        username = request.form['username'].strip()
+        email = f"{username}@gmail.com"  # Automatically append domain
         password = request.form['password']
         try:
-            # Use Firebase REST API to verify email/password
             payload = {
                 'email': email,
                 'password': password,
@@ -1152,6 +1152,13 @@ def login():
         except Exception as e:
             flash(f"❌ Error: {str(e)}")
     return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash("✅ You have been logged out.")
+    return redirect(url_for('login'))
+
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
