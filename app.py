@@ -147,7 +147,10 @@ translations = {
         'time': 'Time',
         'no_completed_orders': 'No completed items in queue.',
         'export_visits_csv': 'Export Visits CSV',
-        'export_prescriptions_csv': 'Export Prescriptions CSV'
+        'export_prescriptions_csv': 'Export Prescriptions CSV',
+        'taking_western_medicine': 'Taking Western Medicine',
+        'western_medicine_duration': 'How long taking Western Medicine'
+
     },
     'zh': {
         'add_patient': '添加病人',
@@ -268,7 +271,10 @@ translations = {
         'time': '时间',
         'no_completed_orders': '队列中暂无完成项目。',
         'export_visits_csv': '导出就诊 CSV',
-        'export_prescriptions_csv': '导出处方 CSV'
+        'export_prescriptions_csv': '导出处方 CSV',
+        'taking_western_medicine': '是否服用西药',
+        'western_medicine_duration': '服用西药多久'
+
     }
 }
 

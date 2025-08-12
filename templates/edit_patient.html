@@ -36,6 +36,49 @@
   </div>
   {% endfor %}
 
+  <!-- Taking Western Medicine -->
+  <div class="row align-items-center mb-2">
+    <div class="col-md-4">
+      <label class="form-label mb-0">{{ t('taking_western_medicine') }}?</label>
+    </div>
+    <div class="col-md-8">
+      <div class="form-check form-check-inline">
+        <input
+          class="form-check-input"
+          type="radio"
+          name="taking_western_medicine"
+          id="westernYes"
+          value="Yes"
+          {% if patient.taking_western_medicine == 'Yes' %}checked{% endif %}
+          required>
+        <label class="form-check-label" for="westernYes">{{ t('yes') }}</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input
+          class="form-check-input"
+          type="radio"
+          name="taking_western_medicine"
+          id="westernNo"
+          value="No"
+          {% if patient.taking_western_medicine == 'No' or not patient.taking_western_medicine %}checked{% endif %}
+          required>
+        <label class="form-check-label" for="westernNo">{{ t('no') }}</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duration (shown only if Yes) -->
+  <div class="mb-3" id="westernDurationGroup" style="display:none;">
+    <label class="form-label" for="westernDurationInput">{{ t('western_medicine_duration') }}</label>
+    <input
+      type="text"
+      id="westernDurationInput"
+      name="western_medicine_duration"
+      class="form-control"
+      value="{{ patient.western_medicine_duration }}"
+      placeholder="E.g., 6 months, 2 years">
+  </div>
+
   <div class="mb-3">
     <label class="form-label">{{ t('other_conditions') }}</label>
     <textarea name="other_conditions" class="form-control">{{ patient.other_conditions }}</textarea>
@@ -49,4 +92,32 @@
 <form action="{{ url_for('delete_patient', id=patient.id) }}" method="POST" onsubmit="return confirm('{{ t('confirm_delete_patient') }}')" class="mt-3">
   <button type="submit" class="btn btn-outline-danger w-100">{{ t('delete_patient') }}</button>
 </form>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const yesRadio = document.getElementById('westernYes');
+    const noRadio  = document.getElementById('westernNo');
+    const group    = document.getElementById('westernDurationGroup');
+    const input    = document.getElementById('westernDurationInput');
+
+    function toggleDuration() {
+      const show = yesRadio.checked;
+      group.style.display = show ? 'block' : 'none';
+      if (show) {
+        input.setAttribute('required', 'required');
+      } else {
+        input.removeAttribute('required');
+        // Optional: clear when hidden
+        // input.value = '';
+      }
+    }
+
+    // Bind events
+    yesRadio.addEventListener('change', toggleDuration);
+    noRadio.addEventListener('change', toggleDuration);
+
+    // Initial state from existing record
+    toggleDuration();
+  });
+</script>
 {% endblock %}
