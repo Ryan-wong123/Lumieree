@@ -163,6 +163,9 @@ translations = {
         'taking_western_medicine': 'Taking Western Medicine',
         'western_medicine_duration': 'How long taking Western Medicine',
         'drug_allergies': 'Drug Allergies',
+        'discharge_advice': 'Discharge Advice',
+        'discharge_advice_placeholder': 'Key instructions for aftercare, red flags, lifestyle or diet advice…',
+
     },
     'zh': {
         'add_patient': '添加病人',
@@ -286,11 +289,11 @@ translations = {
         'export_prescriptions_csv': '导出处方 CSV',
         'taking_western_medicine': '是否服用西药',
         'western_medicine_duration': '服用西药多久',
-        'drug_allergies': '药物过敏'
-
+        'drug_allergies': '药物过敏',
+        'discharge_advice': '出院指导',
+        'discharge_advice_placeholder': '出院后的注意事项、警示症状、生活方式或饮食建议…',
     }
 }
-
 
 @app.context_processor
 def inject_translation():
@@ -298,7 +301,6 @@ def inject_translation():
     return {
         't': lambda key: translations[lang].get(key, key)
     }
-
 
 @app.before_request
 def set_language():
@@ -558,11 +560,13 @@ def patient_visits(id):
             'date': request.form.get('date') or datetime.now().date().isoformat(),
             'condition': request.form.get('condition'),
             'notes': request.form.get('notes'),
+            'discharge_advice': request.form.get('discharge_advice'),  # ✅ NEW
             'prescribed_meds': prescribed_meds,
             'created_at': datetime.now().isoformat(),
             'status': 'draft' if action == 'save_draft' else 'confirmed',
-            'owner_id': current_uid()  # tenant tag on sub-doc
+            'owner_id': current_uid()
         }
+
 
         # delete existing drafts for this owner (under this patient)
         drafts = patient_ref.collection('visits') \

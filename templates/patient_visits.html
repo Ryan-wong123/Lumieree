@@ -65,6 +65,12 @@
         <textarea name="notes" class="form-control" rows="3" placeholder="{{ t('notes_placeholder') }}">{{ draft.notes if draft else '' }}</textarea>
       </div>
 
+      <!-- NEW: Discharge Advice -->
+      <div class="col-md-12">
+        <label class="form-label">{{ t('discharge_advice') }}</label>
+        <textarea name="discharge_advice" class="form-control" rows="3" placeholder="{{ t('discharge_advice_placeholder') }}">{{ draft.discharge_advice if draft else '' }}</textarea>
+      </div>
+
       <div class="col-12 d-flex gap-2">
         <button type="submit" name="action" value="save_draft" class="btn btn-warning w-50">{{ t('save_draft') }}</button>
         <button type="submit" name="action" value="confirm" class="btn btn-success w-50">{{ t('confirm_visit') }}</button>
@@ -82,6 +88,7 @@
       <th>{{ t('condition') }}</th>
       <th>{{ t('medications') }}</th>
       <th>{{ t('notes') }}</th>
+      <th>{{ t('discharge_advice') }}</th>
     </tr>
   </thead>
   <tbody>
@@ -95,10 +102,11 @@
         {% endfor %}
       </td>
       <td>{{ v.notes }}</td>
+      <td>{{ v.discharge_advice }}</td>
     </tr>
     {% else %}
     <tr>
-      <td colspan="4" class="text-center text-muted">{{ t('no_visit_history') }}</td>
+      <td colspan="5" class="text-center text-muted">{{ t('no_visit_history') }}</td>
     </tr>
     {% endfor %}
   </tbody>
