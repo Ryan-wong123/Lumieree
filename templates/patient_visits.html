@@ -116,9 +116,24 @@
   </div>
 </div>
 
+<!-- Past Visit Filters (client-side) -->
+<div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+  <div>
+    <label class="form-label mb-1">{{ t('start_date') if t('start_date') else 'Start date' }}</label>
+    <input type="date" class="form-control" id="visit-start">
+  </div>
+  <div>
+    <label class="form-label mb-1">{{ t('end_date') if t('end_date') else 'End date' }}</label>
+    <input type="date" class="form-control" id="visit-end">
+  </div>
+  <div class="ms-auto">
+    <button type="button" class="btn btn-outline-secondary" id="visit-clear">{{ t('clear') if t('clear') else 'Clear' }}</button>
+  </div>
+</div>
+
 <!-- Past Visit Records -->
 <h5>{{ t('past_visits') }}</h5>
-<table class="table table-striped">
+<table class="table table-striped" id="visits-table">
   <thead class="table-light">
     <tr>
       <th>{{ t('date') }}</th>
@@ -129,9 +144,12 @@
       <th>{{ t('services_rendered') }}</th>
     </tr>
   </thead>
-  <tbody>
+  <tbody id="visits-tbody">
+    {% set _has_visits = (visits|length) > 0 %}
     {% for v in visits %}
-      <tr>
+      {# Ensure each row carries an ISO date for filtering #}
+      {% set iso_date = v.date.strftime('%Y-%m-%d') if v.date.__class__.__name__ in ['date','datetime'] else v.date %}
+      <tr data-date="{{ iso_date }}">
         <td>{{ v.date }}</td>
         <td>{{ v.condition }}</td>
         <td>
@@ -151,11 +169,10 @@
           {% endif %}
         </td>
       </tr>
-    {% else %}
-      <tr>
-        <td colspan="6" class="text-center text-muted">{{ t('no_visit_history') }}</td>
-      </tr>
     {% endfor %}
+    <tr id="visits-empty" class="{{ '' if not _has_visits else 'd-none' }}">
+      <td colspan="6" class="text-center text-muted">{{ t('no_visit_history') }}</td>
+    </tr>
   </tbody>
 </table>
 
@@ -203,8 +220,6 @@
 
   // ===================== Autocomplete (overlay & scrolls itself) =====================
   function attachMedAutocomplete(inputEl) {
-    // we will create the menu right below this input; it overlays the page
-    // HTML will be built inside addMedicineRow(), we just wire events here
     const menu = inputEl.parentElement.querySelector('.dropdown-menu');
 
     let suggestions = [];
@@ -352,6 +367,49 @@
     const draftServices = [];
   {% endif %}
 
+  // ===================== Past Visits: client-side date filter =====================
+  const visitStartEl = document.getElementById('visit-start');
+  const visitEndEl   = document.getElementById('visit-end');
+  const visitsTbody  = document.getElementById('visits-tbody');
+  const visitsEmpty  = document.getElementById('visits-empty');
+
+  function inRange(iso, startIso, endIso) {
+    if (!iso) return false;
+    if (startIso && iso < startIso) return false;
+    if (endIso && iso > endIso) return false;
+    return true;
+  }
+
+  function filterVisits() {
+    if (!visitsTbody) return;
+    const startIso = visitStartEl ? visitStartEl.value : '';
+    const endIso   = visitEndEl ? visitEndEl.value : '';
+
+    let shown = 0;
+    const rows = [...visitsTbody.querySelectorAll('tr[data-date]')];
+    rows.forEach(tr => {
+      const iso = tr.getAttribute('data-date') || '';
+      const ok = (!startIso && !endIso) ? true : inRange(iso, startIso, endIso);
+      tr.classList.toggle('d-none', !ok);
+      if (ok) shown++;
+    });
+
+    if (visitsEmpty) {
+      visitsEmpty.classList.toggle('d-none', shown > 0);
+    }
+  }
+
+  if (visitStartEl) visitStartEl.addEventListener('change', filterVisits);
+  if (visitEndEl) visitEndEl.addEventListener('change', filterVisits);
+  const clearBtn = document.getElementById('visit-clear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      if (visitStartEl) visitStartEl.value = '';
+      if (visitEndEl) visitEndEl.value = '';
+      filterVisits();
+    });
+  }
+
   // ===================== Prefill on load =====================
   window.addEventListener('DOMContentLoaded', async () => {
     await ensureMedNames();
@@ -376,6 +434,9 @@
       }
       draftServices.slice(1).forEach(addServiceRow);
     }
+
+    // Run once on load (in case dates are pre-filled later)
+    filterVisits();
   });
 </script>
 
