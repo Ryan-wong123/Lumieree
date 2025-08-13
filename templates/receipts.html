@@ -37,12 +37,13 @@
   </tfoot>
 </table>
 
-<!-- Services Rendered Section -->
+<!-- Services Rendered (read-only from patient visit) -->
 <h5 class="mt-4">{{ t('services_rendered') }}</h5>
 
 <form id="servicesForm" method="POST" action="/generate_receipt_pdf">
   <input type="hidden" name="patient_name" value="{{ patient.name }}">
 
+  {# Hidden medicine fields for the PDF route #}
   {% for i in items %}
     <input type="hidden" name="medicine_name_{{ loop.index }}" value="{{ i.name }}">
     <input type="hidden" name="medicine_price_{{ loop.index }}" value="{{ i.unit_price }}">
@@ -50,29 +51,44 @@
   {% endfor %}
   <input type="hidden" name="medicine_count" value="{{ items|length }}">
 
+  {% set services_total = namespace(value=0) %}
   <table class="table table-bordered">
     <thead>
       <tr>
-        <th style="width: 10%;">{{ t('use') }}</th>
         <th style="width: 70%;">{{ t('service') }}</th>
-        <th style="width: 20%;">{{ t('price') }}</th>
+        <th style="width: 30%;">{{ t('price') }}</th>
       </tr>
     </thead>
-    <tbody id="servicesTable">
-      {% for service in services %}
-      <tr>
-        <td><input type="checkbox" name="use_{{ loop.index }}" class="service-checkbox" value="{{ loop.index }}"></td>
-        <td><input type="text" name="service_{{ loop.index }}" value="{{ service }}" readonly class="form-control-plaintext" style="width: 100%;"></td>
-        <td><input type="number" name="amount_{{ loop.index }}" class="form-control service-price" min="0" value="0" style="width: 100px;"></td>
-      </tr>
+    <tbody>
+      {% for s in services %}
+        {# s is expected to be a dict: {name, amount}. Be defensive if not. #}
+        {% set s_name = s.name if s is mapping else (s|string) %}
+        {% set s_amt  = (s.amount if s is mapping else 0) or 0 %}
+        {% set services_total.value = services_total.value + s_amt %}
+
+        <!-- Hidden fields so /generate_receipt_pdf totals them as before -->
+        <input type="hidden" name="service_{{ loop.index }}" value="{{ s_name }}">
+        <input type="hidden" name="amount_{{ loop.index }}" value="{{ '%.2f' % s_amt }}">
+        <input type="hidden" name="use_{{ loop.index }}" value="1">
+
+        <tr>
+          <td>{{ s_name }}</td>
+          <td>${{ '%.2f' % s_amt }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="2" class="text-muted">—</td></tr>
       {% endfor %}
     </tbody>
   </table>
 
+  {% set grand_total = (total_medicine.value if total_medicine is defined else 0) + services_total.value %}
+
   <table class="table">
     <tr>
       <th class="text-end">{{ t('grand_total') }}</th>
-      <th id="grandTotal">${{ '%.2f' % total_medicine.value }}</th>
+      <th id="grandTotal">
+        ${{ '%.2f' % grand_total }}
+      </th>
     </tr>
   </table>
 
@@ -84,28 +100,5 @@
     <a href="/front_desk" class="btn btn-secondary mt-2">{{ t('back_to_queue') }}</a>
   </div>
 </form>
-
-<script>
-  const medicineSubtotal = {{ '%.2f' % total_medicine.value }};
-
-  function updateGrandTotal() {
-    let serviceTotal = 0;
-    document.querySelectorAll('#servicesTable tr').forEach(row => {
-      const checkbox = row.querySelector('.service-checkbox');
-      const priceInput = row.querySelector('.service-price');
-      const price = parseFloat(priceInput.value) || 0;
-      if (checkbox.checked) {
-        serviceTotal += price;
-      }
-    });
-
-    const grandTotal = medicineSubtotal + serviceTotal;
-    document.getElementById('grandTotal').innerText = `$${grandTotal.toFixed(2)}`;
-  }
-
-  document.querySelectorAll('.service-checkbox').forEach(el => el.addEventListener('change', updateGrandTotal));
-  document.querySelectorAll('.service-price').forEach(el => el.addEventListener('input', updateGrandTotal));
-  updateGrandTotal();
-</script>
 
 {% endblock %}

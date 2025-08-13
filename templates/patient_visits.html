@@ -49,15 +49,49 @@
                 <th>{{ t('medicine_name') }}</th>
                 <th>{{ t('quantity') }}</th>
                 <th>{{ t('dosage') }}</th>
-                <th>{{ t('action') }}</th>
+                <th>{{ t('actions') }}</th>
               </tr>
             </thead>
-            <tbody id="prescription-list">
-              <!-- Dynamic rows will be inserted here -->
+            <tbody id="prescription-list"></tbody>
+          </table>
+        </div>
+        <button type="button" class="btn btn-outline-secondary mt-2" id="add-med-row">+</button>
+      </div>
+
+      <!-- Services Rendered (saved on the visit) -->
+      <div class="col-md-12 mt-3">
+        <label class="form-label">{{ t('services_rendered') }}</label>
+        <div class="table-responsive">
+          <table class="table table-bordered" id="services-table">
+            <thead class="table-light">
+              <tr>
+                <th>{{ t('service') }}</th>
+                <th style="width: 160px;">{{ t('price') }}</th>
+                <th>{{ t('actions') }}</th>
+              </tr>
+            </thead>
+            <tbody id="services-list">
+              <!-- Template row to clone -->
+              <tr class="service-row">
+                <td>
+                  <select name="service_name" class="form-select" required>
+                    <option value="" disabled selected>{{ t('service') }}</option>
+                    {% for s in service_catalog %}
+                      <option value="{{ s }}">{{ s }}</option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td>
+                  <input name="service_amount" type="number" step="0.01" min="0" class="form-control" value="0" required>
+                </td>
+                <td class="text-center">
+                  <button type="button" class="btn btn-outline-danger btn-sm remove-service">×</button>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
-        <button type="button" class="btn btn-outline-secondary mt-2" onclick="addMedicineRow()">+</button>
+        <button type="button" class="btn btn-outline-secondary mt-2" id="add-service-row">+</button>
       </div>
 
       <div class="col-md-12">
@@ -65,7 +99,6 @@
         <textarea name="notes" class="form-control" rows="3" placeholder="{{ t('notes_placeholder') }}">{{ draft.notes if draft else '' }}</textarea>
       </div>
 
-      <!-- Discharge Advice -->
       <div class="col-md-12">
         <label class="form-label">{{ t('discharge_advice') }}</label>
         <textarea name="discharge_advice" class="form-control" rows="3" placeholder="{{ t('discharge_advice_placeholder') }}">{{ draft.discharge_advice if draft else '' }}</textarea>
@@ -89,6 +122,7 @@
       <th>{{ t('medications') }}</th>
       <th>{{ t('notes') }}</th>
       <th>{{ t('discharge_advice') }}</th>
+      <th>{{ t('services_rendered') }}</th>
     </tr>
   </thead>
   <tbody>
@@ -103,27 +137,38 @@
       </td>
       <td>{{ v.notes }}</td>
       <td>{{ v.discharge_advice }}</td>
+      <td>
+        {% if v.services %}
+          {% for s in v.services %}
+            <div>{{ s.name }} — ${{ '%.2f' % (s.amount or 0) }}</div>
+          {% endfor %}
+        {% else %}
+          <span class="text-muted">—</span>
+        {% endif %}
+      </td>
     </tr>
     {% else %}
     <tr>
-      <td colspan="5" class="text-center text-muted">{{ t('no_visit_history') }}</td>
+      <td colspan="6" class="text-center text-muted">{{ t('no_visit_history') }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 
-<!-- JS for dynamic medicine builder -->
+<!-- Datalist for medicines (if you use this) -->
+<datalist id="med-list">
+  {% for n in medicine_names %}
+    <option value="{{ n }}"></option>
+  {% endfor %}
+</datalist>
+
 <script>
-  {% if draft and draft.prescribed_meds %}
-  const draftMeds = {{ draft.prescribed_meds|tojson }};
-  {% else %}
-  const draftMeds = [];
-  {% endif %}
+  // -------- Meds builder --------
+  const medTbody = document.getElementById("prescription-list");
+  const addMedBtn = document.getElementById("add-med-row");
 
   function addMedicineRow(prefill = null) {
-    const tbody = document.getElementById("prescription-list");
     const tr = document.createElement("tr");
-
     tr.innerHTML = `
       <td><input list="med-list" name="med_name" class="form-control" placeholder="{{ t('medicine_name') }}" required></td>
       <td><input type="number" name="med_quantity" class="form-control" min="1" value="1" required></td>
@@ -137,35 +182,83 @@
       </td>
       <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">×</button></td>
     `;
-
-    tbody.appendChild(tr);
+    medTbody.appendChild(tr);
 
     if (prefill) {
       tr.querySelector('[name="med_name"]').value = prefill.name || '';
       tr.querySelector('[name="med_quantity"]').value = prefill.quantity || 1;
-      // prefill.dosage should be one of "pills", "grams", "bottle" to auto-select
-      if (prefill.dosage) {
-        tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
-      }
+      if (prefill.dosage) tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
     }
   }
 
-  window.addEventListener('DOMContentLoaded', function() {
-    if (draftMeds.length > 0) {
-      draftMeds.forEach(med => {
-        addMedicineRow({ name: med.name, quantity: med.quantity, dosage: med.dosage });
-      });
-    } else {
-      addMedicineRow();
+  addMedBtn.addEventListener('click', addMedicineRow);
+
+  {% if draft and draft.prescribed_meds %}
+    const draftMeds = {{ draft.prescribed_meds|tojson }};
+  {% else %}
+    const draftMeds = [];
+  {% endif %}
+
+  // -------- Services builder (clone the first row) --------
+  const servicesTbody = document.getElementById('services-list');
+  const addServiceBtn = document.getElementById('add-service-row');
+
+  function addServiceRow(prefill = null) {
+    const first = servicesTbody.querySelector('tr.service-row');
+    const clone = first.cloneNode(true);
+    // clear values
+    clone.querySelector('select[name="service_name"]').value = '';
+    clone.querySelector('input[name="service_amount"]').value = '0';
+    servicesTbody.appendChild(clone);
+
+    if (prefill) {
+      const sel = clone.querySelector('select[name="service_name"]');
+      // if option not in catalog (legacy), append once
+      if (![...sel.options].some(o => o.value === prefill.name)) {
+        const opt = document.createElement('option');
+        opt.value = prefill.name; opt.textContent = prefill.name;
+        sel.appendChild(opt);
+      }
+      sel.value = prefill.name || '';
+      clone.querySelector('input[name="service_amount"]').value = (prefill.amount ?? 0);
+    }
+  }
+
+  addServiceBtn.addEventListener('click', addServiceRow);
+  servicesTbody.addEventListener('click', (e) => {
+    if (e.target.classList.contains('remove-service')) {
+      const rows = servicesTbody.querySelectorAll('tr.service-row');
+      if (rows.length > 1) e.target.closest('tr').remove();
+    }
+  });
+
+  {% if draft and draft.services %}
+    const draftServices = {{ draft.services|tojson }};
+  {% else %}
+    const draftServices = [];
+  {% endif %}
+
+  // -------- Prefill on load --------
+  window.addEventListener('DOMContentLoaded', () => {
+    if (draftMeds.length) draftMeds.forEach(addMedicineRow); else addMedicineRow();
+    // services: we already have one template row present; prefill or add a blank
+    if (draftServices.length) {
+      // fill the first row with the first service, then add clones for the rest
+      const first = servicesTbody.querySelector('tr.service-row');
+      const sel = first.querySelector('select[name="service_name"]');
+      const amt = first.querySelector('input[name="service_amount"]');
+      const s0 = draftServices[0];
+      if (s0) {
+        if (![...sel.options].some(o => o.value === s0.name)) {
+          const opt = document.createElement('option');
+          opt.value = s0.name; opt.textContent = s0.name; sel.appendChild(opt);
+        }
+        sel.value = s0.name || '';
+        amt.value = (s0.amount ?? 0);
+      }
+      draftServices.slice(1).forEach(addServiceRow);
     }
   });
 </script>
-
-<!-- Autocomplete support -->
-<datalist id="med-list">
-  {% for name in medicine_names %}
-    <option value="{{ name }}">
-  {% endfor %}
-</datalist>
 
 {% endblock %}

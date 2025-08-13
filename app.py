@@ -9,9 +9,13 @@ import io
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.lib import colors
 from collections import defaultdict
 import requests
+import re
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -38,6 +42,43 @@ def with_owner(query):
 @app.route('/')
 def home():
     return redirect(url_for('patients'))
+# Global service catalog (backend source of truth)
+SERVICE_CATALOG = [
+    "Newly Diagnosed",
+    "Acupuncture",
+    "Cupping Treatment (per part)",
+    "Scrapping Treatment",
+    "Pricking Bloodletting",
+    "Calf bruise Bloodletting",
+    "Bandage",
+    "Plaster Cloth",
+    "Pain Treatments (per part)",
+    "Capsules",
+    "Honey Pill (big)",
+    "Tablets",
+    "Package 1 (Free clinic fee, acupuncture 1X)",
+    "Package 2 (Free clinic fee, acupuncture 3X)",
+    "Package 3 (Free clinic fee, acupuncture 5X)",
+    "Acupuncture & Cupping Package (10X, 1 aching part each time)",
+    "Acupuncture Package (10x)",
+    "Acupuncture Package (20x)",
+    "Acupuncture Package (30x)",
+    "Cupping (10x)",
+    "Massage Package (10x each 45 mins)",
+    "Facial Acupuncture & Beauty Massage (15 minutes)",
+    "Facial Beauty Acupuncture",
+    "Facial Beauty Scraping",
+    "Beauty Acupuncture Package (10x)",
+    "Beauty Acupoint Package (10x)",
+    "Weight Loss Partial Body Massage 30 mins",
+    "Weight Loss Whole Body Massage 60 mins",
+    "Weight Loss Acupuncture",
+    "Abdominal Cupping Weight Loss",
+    "Thigh, Hips ( Bilateral ) Cupping Weight Loss",
+    "Weight Loss Acupuncture Package (10x)",
+    "Acupuncture 10X, Abdominal Cupping 10X, Free Clinic Fee",
+    "Acupuncture 10X + Thigh, Hips (Bilateral) ,Abdominal Cupping 10X, Free Clinic Fee",
+]
 
 translations = {
     'en': {
@@ -534,97 +575,109 @@ def edit_patient(id):
     patient = snap.to_dict()
     patient['id'] = id
     return render_template('edit_patient.html', patient=patient)
-
 @app.route('/patients/<id>/visits', methods=['GET', 'POST'])
 def patient_visits(id):
     require_login()
     patient_ref = db.collection('patients').document(id)
-    patient_snap = patient_ref.get()
-
-    # Ensure this patient belongs to the logged-in user
-    if not (patient_snap.exists and patient_snap.to_dict().get('owner_id') == current_uid()):
+    snap = patient_ref.get()
+    if not (snap.exists and snap.to_dict().get('owner_id') == current_uid()):
         flash('❌ Patient not found.')
         return redirect(url_for('patients'))
+    patient = snap.to_dict()
 
-    patient = patient_snap.to_dict()
-    patient['id'] = id
-
+    # ---------- POST: save visit (meds + services) ----------
     if request.method == 'POST':
         action = request.form.get('action')
+
+        # Prescribed meds (existing behaviour)
         names = request.form.getlist('med_name')
         quantities = request.form.getlist('med_quantity')
         dosages = request.form.getlist('med_dosage')
-
         prescribed_meds = []
-        for i in range(len(names)):
-            prescribed_meds.append({
-                'name': names[i],
-                'quantity': int(quantities[i]),
-                'dosage': dosages[i]
-            })
+        for n, q, d in zip(names, quantities, dosages):
+            if not n:
+                continue
+            try:
+                qv = int(q)
+            except Exception:
+                qv = 1
+            prescribed_meds.append({'name': n, 'quantity': qv, 'dosage': d})
+
+        # ✅ Services (parsed on backend)
+        service_names   = request.form.getlist('service_name')     # multiple same-name fields
+        service_amounts = request.form.getlist('service_amount')
+        services = []
+        for name, amt in zip(service_names, service_amounts):
+            n = (name or "").strip()
+            if not n:
+                continue
+            try:
+                value = float(amt or 0)
+            except ValueError:
+                value = 0.0
+            services.append({'name': n, 'amount': value})
 
         visit = {
             'date': request.form.get('date') or datetime.now().date().isoformat(),
             'condition': request.form.get('condition'),
             'notes': request.form.get('notes'),
-            'discharge_advice': request.form.get('discharge_advice'),  # ✅ NEW
+            'discharge_advice': request.form.get('discharge_advice'),
             'prescribed_meds': prescribed_meds,
+            'services': services,                     # ✅ save services on the visit
             'created_at': datetime.now().isoformat(),
             'status': 'draft' if action == 'save_draft' else 'confirmed',
-            'owner_id': current_uid()
+            'owner_id': current_uid(),
         }
 
-
-        # delete existing drafts for this owner (under this patient)
-        drafts = patient_ref.collection('visits') \
-            .where('owner_id', '==', current_uid()) \
-            .where('status', '==', 'draft').stream()
+        # Remove prior drafts for this user under this patient (keeps your behaviour)
+        drafts = (patient_ref.collection('visits')
+                  .where('owner_id', '==', current_uid())
+                  .where('status', '==', 'draft')
+                  .stream())
         for d in drafts:
             d.reference.delete()
 
-        # Add new visit
-        patient_ref.collection('visits').add(visit)
+        # Save visit
+        add_res = patient_ref.collection('visits').add(visit)
+        visit_id = add_res[1].id
 
-        # If confirmed, enqueue for THIS user’s front desk
+        # Optionally enqueue to front desk with a pointer to the visit (helps receipts)
         if action == 'confirm' and prescribed_meds:
             db.collection('front_desk_queue').add({
                 'patient_id': id,
+                'visit_id': visit_id,                 # ✅ carry visit_id
                 'items': prescribed_meds,
                 'status': 'waiting',
                 'timestamp': datetime.now().isoformat(),
-                'owner_id': current_uid()
+                'owner_id': current_uid(),
             })
 
         flash('Visit saved as draft.' if action == 'save_draft' else 'Visit confirmed and sent to front desk.')
         return redirect(url_for('patient_visits', id=id))
 
-    # latest draft (this user)
-    draft_query = patient_ref.collection('visits') \
-        .where('owner_id', '==', current_uid()) \
-        .where('status', '==', 'draft') \
-        .limit(1).stream()
-    draft = next(draft_query, None)
-    draft = draft.to_dict() if draft else None
+    # ---------- GET: render page ----------
+    # build past visits list
+    visits_q = (patient_ref.collection('visits')
+                .where('owner_id', '==', current_uid())
+                .order_by('date')
+                .stream())
+    visits = [dict(v.to_dict() | {'id': v.id}) for v in visits_q]
 
-    # confirmed visits (this user), ordered by date DESC
-    # ⚠️ Requires a composite index: owner_id ASC, status ASC, date DESC on collection group "visits"
-    visits_ref = patient_ref.collection('visits') \
-        .where('owner_id', '==', current_uid()) \
-        .where('status', '==', 'confirmed') \
-        .order_by('date', direction=firestore.Query.DESCENDING)
+    # optional: a draft to prefill (if you keep drafts)
+    draft = None
+    # ... if you already have draft lookup, keep it here
 
-    visits = [{**v.to_dict(), 'id': v.id} for v in visits_ref.stream()]
+    # Medicine names list for datalist (if you already have this)
+    med_names = [m.to_dict().get('name') for m in with_owner(db.collection('medicines')).stream()]
 
-    # medicine names limited to this user
-    med_names = [m.to_dict().get('name')
-                 for m in with_owner(db.collection('medicines')).stream()
-                 if m.to_dict().get('name')]
-
-    return render_template('patient_visits.html',
-                           patient=patient,
-                           visits=visits,
-                           medicine_names=med_names,
-                           draft=draft)
+    return render_template(
+        'patient_visits.html',
+        patient=patient,
+        visits=visits,
+        draft=draft,
+        medicine_names=med_names,
+        service_catalog=SERVICE_CATALOG,   # ✅ pass catalog to template
+    )
 
 @app.route('/patients/delete/<id>', methods=['POST'])
 def delete_patient(id):
@@ -709,22 +762,29 @@ def receipt(prescription_id):
         flash('❌ Patient not found.')
         return redirect(url_for('patients'))
     patient = p_snap.to_dict()
+    patient['id'] = p_ref.id  # helpful for hidden fields in the template
 
-    services = [
-        "Consultation",
-        "Acupuncture",
-        "Cupping Therapy",
-        "Tui Na Massage",
-        "Herbal Medicine Advice"
-    ]
+    # ✅ Fetch latest confirmed visit for this patient (owned by current user)
+    saved_services = []
+    visits_q = (p_ref.collection('visits')
+                .where('owner_id', '==', current_uid())
+                .where('status', '==', 'confirmed')
+                .order_by('date', direction=firestore.Query.DESCENDING)
+                .limit(1)
+                .stream())
+    latest_visit = next(visits_q, None)
+    if latest_visit:
+        vdata = latest_visit.to_dict()
+        saved_services = vdata.get('services', []) or []
 
     return render_template(
-        'receipt.html',
+        'receipts.html',
         patient=patient,
         items=data['items'],
         total=data['total'],
-        services=services
+        services=saved_services  # ← read-only, straight from the visit
     )
+
 
 @app.route('/receipt/queue/<queue_id>')
 def queue_receipt(queue_id):
@@ -748,20 +808,16 @@ def queue_receipt(queue_id):
         flash('❌ Patient not found.')
         return redirect(url_for('front_desk'))
     patient = p_snap.to_dict()
+    patient['id'] = p_ref.id
 
-    # Build line items with unit and compute totals
+    # Build medicine items/totals (unchanged)
     items = []
     total = 0.0
-
     for i in queue_data.get('items', []):
-        # The visit stored dosage as the selected unit ("pills", "grams", "bottle")
         unit = (i.get('dosage') or '').strip()
         qty = int(i.get('quantity', 0))
-
-        # Look up medicine under this owner to get current unit price
         med_q = with_owner(db.collection('medicines')).where('name', '==', i.get('name', '')).limit(1).stream()
         med = next(med_q, None)
-
         if med:
             m = med.to_dict()
             price = float(m.get('price', 0.0))
@@ -775,7 +831,6 @@ def queue_receipt(queue_id):
                 'subtotal': subtotal,
             })
         else:
-            # If not found, show the line with $0.00 to avoid breaking the receipt
             items.append({
                 'name': i.get('name', ''),
                 'unit_price': 0.0,
@@ -784,95 +839,121 @@ def queue_receipt(queue_id):
                 'subtotal': 0.0,
             })
 
-    # Optional: mark as completed here only if you want (or do it from the button flow)
-    # queue_ref.update({'status': 'completed'})
-
-    services = [
-         "Newly Diagnosed",
-        "Acupuncture",
-        "Cupping Treatment (per part)",
-        "Scrapping Treatment",
-        "Pricking Bloodletting",
-        "Calf bruise Bloodletting",
-        "Bandage",
-        "Plaster Cloth",
-        "Pain Treatments (per part)",
-        "Capsules",
-        "Honey Pill (big)",
-        "Tablets",
-        "Package 1 (Free clinic fee, acupuncture 1X)",
-        "Package 2 (Free clinic fee, acupuncture 3X)",
-        "Package 3 (Free clinic fee, acupuncture 5X)",
-        "Acupuncture & Cupping Package (10X, 1 aching part each time)"
-        "Acupuncture Package (10x)",
-        "Acupuncture Package (20x)",
-        "Acupuncture Package (30x)",
-        "Cupping (10x)",
-        "Massage Package (10x each 45 mins)",
-        "Facial Acupuncture & Beauty Massage (15 minutes)",
-        "Facial Beauty Acupuncture",
-        "Facial Beauty Scraping",
-        "Beauty Acupuncture Package (10x)",
-        "Beauty Acupoint Package (10x)",
-        "Weight Loss Partial Body Massage 30 mins",
-        "Weight Loss Whole Body Massage 60 mins",
-        "Weight Loss Acupuncture",
-        "Abdominal Cupping Weight Loss",
-        "Thigh, Hips ( Bilateral ) Cupping Weight Loss",
-        "Loss Weight Acupuncture Package (10x)",
-        "Acupuncture 10X, Abdominal Cupping 10X, Free Clinic Fee",
-        "Acupuncture 10X + Thigh, Hips (Bilateral) ,Abdominal Cupping 10X, Free Clinic Fee"
-    ]
+    # ✅ NEW: read services from the linked visit
+    saved_services = []
+    visit_id = queue_data.get('visit_id')
+    if visit_id:
+        vref = p_ref.collection('visits').document(visit_id)
+        vsnap = vref.get()
+        if vsnap.exists and vsnap.to_dict().get('owner_id') == current_uid():
+            saved_services = vsnap.to_dict().get('services', []) or []
 
     return render_template(
-        'reciepts.html',
+        'receipts.html',
         patient=patient,
-        items=items,               # contains quantity, unit_price, unit, subtotal
+        items=items,
         total=round(total, 2),
-        services=services
+        services=saved_services,                     # ← rename this key
+        queue_data={'id': queue_id, 'visit_id': visit_id}
     )
-
-
 @app.route('/generate_receipt_pdf', methods=['POST'])
 def generate_receipt_pdf():
+    # ---------- Font setup (CJK) ----------
+    CH_REG = None   # name of registered regular CJK font
+    CH_BOLD = None  # name of registered bold CJK font (optional)
+
+    # Try project-local Noto Sans CJK first
+    try:
+        font_dir = os.path.join(app.root_path, 'static', 'fonts')
+        reg_path = os.path.join(font_dir, 'NotoSansCJKsc-Regular.otf')
+        bold_path = os.path.join(font_dir, 'NotoSansCJKsc-Bold.otf')
+        if os.path.exists(reg_path):
+            pdfmetrics.registerFont(TTFont('NotoSansCJKsc-Regular', reg_path))
+            CH_REG = 'NotoSansCJKsc-Regular'
+        if os.path.exists(bold_path):
+            pdfmetrics.registerFont(TTFont('NotoSansCJKsc-Bold', bold_path))
+            CH_BOLD = 'NotoSansCJKsc-Bold'
+    except Exception:
+        pass
+
+    # Fallback to built-in CID font if Noto not present
+    if not CH_REG:
+        pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+        CH_REG = 'STSong-Light'
+        # CID fallback has no separate bold; we'll reuse regular for bold lines
+        CH_BOLD = CH_REG
+
     patient_name = request.form.get('patient_name', 'Patient')
     visit_date = datetime.now().strftime("%d-%m-%Y")
     bill_no = f"{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    # Medicines
-    medicine_count = int(request.form.get('medicine_count', 0))
-    prescribed_medicines = []
-    medicine_total = 0
+    # ---------- Helpers ----------
+    def _parse_float(val, default=0.0):
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default
+
+    def _parse_numeric_label(label, default=1):
+        """
+        Extract a number from strings like '32 grams' or '1.5 bottle'.
+        Returns int if whole number, else rounded float. Falls back to default.
+        """
+        if label is None:
+            return default
+        s = str(label).strip()
+        try:
+            return int(s)
+        except Exception:
+            pass
+        m = re.search(r'(\d+(?:\.\d+)?)', s)
+        if not m:
+            return default
+        try:
+            num = float(m.group(1))
+            return int(num) if num.is_integer() else round(num, 2)
+        except Exception:
+            return default
+
+    # ---------- Medicines ----------
+    medicine_count = int(request.form.get('medicine_count', 0) or 0)
+    prescribed_medicines = []  # (name, qty_label, price, subtotal)
+    medicine_total = 0.0
+
     for i in range(1, medicine_count + 1):
-        name = request.form.get(f'medicine_name_{i}')
-        price = float(request.form.get(f'medicine_price_{i}', 0))
-        qty = int(request.form.get(f'medicine_qty_{i}', 0))
-        subtotal = price * qty
-        prescribed_medicines.append((name, qty, price, subtotal))
+        name = request.form.get(f'medicine_name_{i}') or ''
+        price = _parse_float(request.form.get(f'medicine_price_{i}', 0), 0.0)
+        qty_label = request.form.get(f'medicine_qty_{i}', '1')  # e.g. "32 grams"
+        qty_num = _parse_numeric_label(qty_label, default=1)
+
+        subtotal = price * (qty_num if isinstance(qty_num, (int, float)) else 1)
+        prescribed_medicines.append((name, qty_label, price, subtotal))
         medicine_total += subtotal
 
-    # Services
-    services = []
-    service_total = 0
+    # ---------- Services ----------
+    services = []        # (service_name, amount)
+    service_total = 0.0
     for key in request.form.keys():
         if key.startswith('service_'):
-            service_name = request.form[key]
-            index = key.split('_')[1]
-            amount = float(request.form.get(f'amount_{index}', 0))
+            index = key.split('_', 1)[1]
+            service_name = request.form.get(key) or ''
+            amount = _parse_float(request.form.get(f'amount_{index}', 0), 0.0)
             if request.form.get(f'use_{index}'):
                 services.append((service_name, amount))
                 service_total += amount
 
     grand_total = medicine_total + service_total
 
+    # ---------- PDF ----------
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # Header
-    p.setFont("Helvetica-Bold", 16)
+    # Header — use CJK font for Chinese line; you can also use it for all text if you prefer
+    p.setFont(CH_BOLD or CH_REG, 16)
     p.drawCentredString(width/2, height - 40, "春秋堂中医药诊所")
-    p.setFont("Helvetica-Bold", 14)
+
+    p.setFont("Helvetica-Bold", 14)  # Latin text can stay in Helvetica
     p.drawCentredString(width/2, height - 60, "Harmony TCM Healthcare")
     p.setFont("Helvetica", 9)
     p.drawCentredString(width/2, height - 75, "Reg. No: 201223383")
@@ -891,45 +972,50 @@ def generate_receipt_pdf():
     p.drawString(50, y - 15, f"Visit Date: {visit_date}")
     p.drawString(50, y - 30, f"Bill No.: {bill_no}")
 
+    # Table layout
     y -= 70
     row_height = 20
     table_left = 50
     table_right = width - 50
-    total_rows = len(prescribed_medicines) + len(services) + 2
+    total_rows = len(prescribed_medicines) + len(services) + 2  # + header + total row
     table_height = total_rows * row_height
-
     table_top = y
     table_bottom = y - table_height
 
     p.setFont("Helvetica", 10)
     p.rect(table_left, table_bottom, table_right - table_left, table_height)
 
+    # Table header
     p.setFont("Helvetica-Bold", 11)
     p.line(table_left, table_top - row_height, table_right, table_top - row_height)
     p.drawString(table_left + 10, table_top - 15, "Services Rendered")
     p.drawRightString(table_right - 10, table_top - 15, "Amount (S$)")
 
     y_cursor = table_top - row_height
-
     p.setFont("Helvetica", 10)
-    for name, qty, price, subtotal in prescribed_medicines:
+
+    # Medicines rows
+    for name, qty_label, price, subtotal in prescribed_medicines:
         y_cursor -= row_height
         p.line(table_left, y_cursor, table_right, y_cursor)
-        p.drawString(table_left + 10, y_cursor + 5, f"{name} ({qty}x @ ${price:.2f})")
+        p.drawString(table_left + 10, y_cursor + 5, f"{name} ({qty_label} @ ${price:.2f})")
         p.drawRightString(table_right - 10, y_cursor + 5, f"{subtotal:.2f}")
 
+    # Services rows
     for name, amount in services:
         y_cursor -= row_height
         p.line(table_left, y_cursor, table_right, y_cursor)
         p.drawString(table_left + 10, y_cursor + 5, name)
         p.drawRightString(table_right - 10, y_cursor + 5, f"{amount:.2f}")
 
+    # Total row
     y_cursor -= row_height
     p.line(table_left, y_cursor, table_right, y_cursor)
     p.setFont("Helvetica-Bold", 10)
     p.drawString(table_left + 10, y_cursor + 5, "Total")
     p.drawRightString(table_right - 10, y_cursor + 5, f"{grand_total:.2f}")
 
+    # Footer lines
     p.line(60, 60, 160, 60)
     p.drawString(80, 45, "Date")
     p.line(width - 200, 60, width - 100, 60)
@@ -938,8 +1024,12 @@ def generate_receipt_pdf():
     p.showPage()
     p.save()
     buffer.seek(0)
-    return send_file(buffer, as_attachment=True, download_name=f"Receipt_{bill_no}.pdf", mimetype='application/pdf')
-
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f"Receipt_{bill_no}.pdf",
+        mimetype='application/pdf'
+    )
 
 
 # ================= Front Desk View =================
