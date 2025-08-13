@@ -25,7 +25,9 @@
         <p>{{ t('status') }}: {{ t(item.status) }}</p>
         <ul>
           {% for i in item["items"] %}
-          <li>{{ i.quantity }}x {{ i.name }}</li>
+          <li>
+            {{ i.quantity }}{% if i.dosage %} {{ i.dosage }}{% endif %} × {{ i.name }}
+          </li>
           {% endfor %}
         </ul>
         <a href="/front_desk/update/{{ item.id }}/completed" class="btn btn-success btn-sm">{{ t('mark_completed') }}</a>
@@ -48,7 +50,9 @@
         <p>{{ t('status') }}: {{ t(item.status) }}</p>
         <ul>
           {% for i in item["items"] %}
-          <li>{{ i.quantity }}x {{ i.name }}</li>
+          <li>
+            {{ i.quantity }}{% if i.dosage %} {{ i.dosage }}{% endif %} × {{ i.name }}
+          </li>
           {% endfor %}
         </ul>
         <a href="/front_desk/update/{{ item.id }}/void" class="btn btn-danger btn-sm">{{ t('void') }}</a>

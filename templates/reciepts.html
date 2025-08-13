@@ -17,12 +17,14 @@
   <tbody>
     {% set total_medicine = namespace(value=0) %}
     {% for i in items %}
-      {% set subtotal = i.unit_price * i.quantity %}
+      {% set subtotal = i.subtotal if i.subtotal is defined else (i.unit_price * i.quantity) %}
       {% set total_medicine.value = total_medicine.value + subtotal %}
       <tr>
         <td>{{ i.name }}</td>
-        <td>{{ i.unit_price }}</td>
-        <td>{{ i.quantity }}</td>
+        <td>{{ '%.2f' % i.unit_price }}</td>
+        <td>
+          {{ i.quantity }}{% if i.unit %} {{ i.unit }}{% endif %}
+        </td>
         <td>{{ '%.2f' % subtotal }}</td>
       </tr>
     {% endfor %}
@@ -44,7 +46,7 @@
   {% for i in items %}
     <input type="hidden" name="medicine_name_{{ loop.index }}" value="{{ i.name }}">
     <input type="hidden" name="medicine_price_{{ loop.index }}" value="{{ i.unit_price }}">
-    <input type="hidden" name="medicine_qty_{{ loop.index }}" value="{{ i.quantity }}">
+    <input type="hidden" name="medicine_qty_{{ loop.index }}" value="{{ i.quantity }}{% if i.unit %} {{ i.unit }}{% endif %}">
   {% endfor %}
   <input type="hidden" name="medicine_count" value="{{ items|length }}">
 
@@ -91,9 +93,7 @@
     document.querySelectorAll('#servicesTable tr').forEach(row => {
       const checkbox = row.querySelector('.service-checkbox');
       const priceInput = row.querySelector('.service-price');
-
       const price = parseFloat(priceInput.value) || 0;
-
       if (checkbox.checked) {
         serviceTotal += price;
       }
@@ -103,14 +103,8 @@
     document.getElementById('grandTotal').innerText = `$${grandTotal.toFixed(2)}`;
   }
 
-  document.querySelectorAll('.service-checkbox').forEach(el => {
-    el.addEventListener('change', updateGrandTotal);
-  });
-
-  document.querySelectorAll('.service-price').forEach(el => {
-    el.addEventListener('input', updateGrandTotal);
-  });
-
+  document.querySelectorAll('.service-checkbox').forEach(el => el.addEventListener('change', updateGrandTotal));
+  document.querySelectorAll('.service-price').forEach(el => el.addEventListener('input', updateGrandTotal));
   updateGrandTotal();
 </script>
 

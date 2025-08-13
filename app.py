@@ -725,51 +725,70 @@ def receipt(prescription_id):
         total=data['total'],
         services=services
     )
+
 @app.route('/receipt/queue/<queue_id>')
 def queue_receipt(queue_id):
     require_login()
+
     queue_ref = db.collection('front_desk_queue').document(queue_id)
     q_snap = queue_ref.get()
-    queue_data = q_snap.to_dict()
-
-    if not queue_data or queue_data.get('owner_id') != current_uid():
+    if not q_snap.exists:
         flash('❌ Queue item not found.')
         return redirect(url_for('front_desk'))
 
-    queue_ref.update({'status': 'completed'})
+    queue_data = q_snap.to_dict()
+    if queue_data.get('owner_id') != current_uid():
+        flash('❌ Queue item not found.')
+        return redirect(url_for('front_desk'))
 
-    p_ref = db.collection('patients').document(queue_data['patient_id'])
+    # Patient
+    p_ref = db.collection('patients').document(queue_data.get('patient_id', ''))
     p_snap = p_ref.get()
     if not (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()):
         flash('❌ Patient not found.')
         return redirect(url_for('front_desk'))
     patient = p_snap.to_dict()
 
+    # Build line items with unit and compute totals
     items = []
     total = 0.0
+
     for i in queue_data.get('items', []):
-        med_query = with_owner(db.collection('medicines')).where('name', '==', i['name']).limit(1).stream()
-        med = next(med_query, None)
+        # The visit stored dosage as the selected unit ("pills", "grams", "bottle")
+        unit = (i.get('dosage') or '').strip()
+        qty = int(i.get('quantity', 0))
+
+        # Look up medicine under this owner to get current unit price
+        med_q = with_owner(db.collection('medicines')).where('name', '==', i.get('name', '')).limit(1).stream()
+        med = next(med_q, None)
+
         if med:
-            med_data = med.to_dict()
-            subtotal = float(med_data['price']) * int(i['quantity'])
+            m = med.to_dict()
+            price = float(m.get('price', 0.0))
+            subtotal = price * qty
             total += subtotal
             items.append({
-                'name': med_data['name'],
-                'unit_price': med_data['price'],
-                'quantity': i['quantity'],
-                'subtotal': subtotal
+                'name': m.get('name', i.get('name', '')),
+                'unit_price': price,
+                'quantity': qty,
+                'unit': unit,
+                'subtotal': subtotal,
             })
         else:
+            # If not found, show the line with $0.00 to avoid breaking the receipt
             items.append({
-                'name': i['name'],
+                'name': i.get('name', ''),
                 'unit_price': 0.0,
-                'quantity': i['quantity'],
-                'subtotal': 0.0
+                'quantity': qty,
+                'unit': unit,
+                'subtotal': 0.0,
             })
 
+    # Optional: mark as completed here only if you want (or do it from the button flow)
+    # queue_ref.update({'status': 'completed'})
+
     services = [
-        "Newly Diagnosed",
+         "Newly Diagnosed",
         "Acupuncture",
         "Cupping Treatment (per part)",
         "Scrapping Treatment",
@@ -808,10 +827,11 @@ def queue_receipt(queue_id):
     return render_template(
         'reciepts.html',
         patient=patient,
-        items=items,
+        items=items,               # contains quantity, unit_price, unit, subtotal
         total=round(total, 2),
         services=services
     )
+
 
 @app.route('/generate_receipt_pdf', methods=['POST'])
 def generate_receipt_pdf():
@@ -923,40 +943,43 @@ def generate_receipt_pdf():
 
 
 # ================= Front Desk View =================
+
 @app.route('/front_desk')
 def front_desk():
     require_login()
-    queue = with_owner(db.collection('front_desk_queue'))\
-        .order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
-    
-    waiting, prepared, completed = [], [], []
+
+    # Pull this user's queue items, newest first
+    queue = with_owner(db.collection('front_desk_queue')) \
+        .order_by('timestamp', direction=firestore.Query.DESCENDING) \
+        .stream()
+
+    waiting, completed = [], []
 
     for entry in queue:
         doc = entry.to_dict()
 
-        # Patient must also belong to this owner
-        p_ref = db.collection('patients').document(doc['patient_id'])
+        # Patient details (guard against cross-tenant or deleted patients)
+        p_ref = db.collection('patients').document(doc.get('patient_id', ''))
         p_snap = p_ref.get()
         patient = p_snap.to_dict() if (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()) else None
-        if not patient:
-            patient = {'name': '❌ Unknown (Deleted/Other Tenant)', 'id': doc.get('patient_id', 'N/A')}
+        patient_name = patient.get('name') if patient else 'Unknown (Deleted/Other Tenant)'
 
         item = {
             'id': entry.id,
-            'status': doc.get('status'),
-            'patient_name': patient.get('name', 'Unknown'),
-            'items': doc.get('items', []),
+            'status': doc.get('status', 'waiting'),
+            'patient_name': patient_name,
+            # items: list of {'name', 'quantity', 'dosage'}; keep as-is so template can show unit
+            'items': doc.get('items', [])
         }
 
-        status = doc.get('status')
-        if status == 'waiting':
-            waiting.append(item)
-        elif status == 'prepared':
-            prepared.append(item)
-        elif status == 'completed':
+        if item['status'] == 'completed':
             completed.append(item)
+        else:
+            waiting.append(item)
 
-    return render_template('front_desk.html', waiting=waiting, prepared=prepared, completed=completed)
+    return render_template('front_desk.html', waiting=waiting, completed=completed)
+
+
 @app.route('/front_desk/update/<queue_id>/<status>')
 def update_queue_status(queue_id, status):
     require_login()
