@@ -31,18 +31,20 @@
 
     <form method="POST" class="row g-3">
       <div class="col-md-4">
-        <input type="date" name="date" class="form-control" value="{{ draft.date if draft else now().strftime('%Y-%m-%d') }}">
+        <input type="date" name="date" class="form-control"
+               value="{{ draft.date if draft else now().strftime('%Y-%m-%d') }}">
       </div>
 
       <div class="col-md-12">
         <label class="form-label">{{ t('condition') }}</label>
-        <textarea name="condition" class="form-control form-control-lg" rows="7" placeholder="{{ t('condition_placeholder') }}" required>{{ draft.condition if draft else '' }}</textarea>
+        <textarea name="condition" class="form-control form-control-lg" rows="7"
+                  placeholder="{{ t('condition_placeholder') }}" required>{{ draft.condition if draft else '' }}</textarea>
       </div>
 
       <!-- Prescribed Medications (Table Style) -->
       <div class="col-md-12">
         <label class="form-label">{{ t('prescribed_meds') }}</label>
-        <div class="table-responsive">
+        <div class="">
           <table class="table table-bordered" id="prescription-table">
             <thead class="table-light">
               <tr>
@@ -96,12 +98,14 @@
 
       <div class="col-md-12">
         <label class="form-label">{{ t('overall_notes') }}</label>
-        <textarea name="notes" class="form-control" rows="3" placeholder="{{ t('notes_placeholder') }}">{{ draft.notes if draft else '' }}</textarea>
+        <textarea name="notes" class="form-control" rows="3"
+                  placeholder="{{ t('notes_placeholder') }}">{{ draft.notes if draft else '' }}</textarea>
       </div>
 
       <div class="col-md-12">
         <label class="form-label">{{ t('discharge_advice') }}</label>
-        <textarea name="discharge_advice" class="form-control" rows="3" placeholder="{{ t('discharge_advice_placeholder') }}">{{ draft.discharge_advice if draft else '' }}</textarea>
+        <textarea name="discharge_advice" class="form-control" rows="3"
+                  placeholder="{{ t('discharge_advice_placeholder') }}">{{ draft.discharge_advice if draft else '' }}</textarea>
       </div>
 
       <div class="col-12 d-flex gap-2">
@@ -127,50 +131,158 @@
   </thead>
   <tbody>
     {% for v in visits %}
-    <tr>
-      <td>{{ v.date }}</td>
-      <td>{{ v.condition }}</td>
-      <td>
-        {% for med in v.prescribed_meds %}
-          <div>{{ med.name }} — {{ med.quantity }} {{ med.dosage }}</div>
-        {% endfor %}
-      </td>
-      <td>{{ v.notes }}</td>
-      <td>{{ v.discharge_advice }}</td>
-      <td>
-        {% if v.services %}
-          {% for s in v.services %}
-            <div>{{ s.name }} — ${{ '%.2f' % (s.amount or 0) }}</div>
+      <tr>
+        <td>{{ v.date }}</td>
+        <td>{{ v.condition }}</td>
+        <td>
+          {% for med in v.prescribed_meds %}
+            <div>{{ med.name }} — {{ med.quantity }} {{ med.dosage }}</div>
           {% endfor %}
-        {% else %}
-          <span class="text-muted">—</span>
-        {% endif %}
-      </td>
-    </tr>
+        </td>
+        <td>{{ v.notes }}</td>
+        <td>{{ v.discharge_advice }}</td>
+        <td>
+          {% if v.services %}
+            {% for s in v.services %}
+              <div>{{ s.name }} — ${{ '%.2f' % (s.amount or 0) }}</div>
+            {% endfor %}
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+      </tr>
     {% else %}
-    <tr>
-      <td colspan="6" class="text-center text-muted">{{ t('no_visit_history') }}</td>
-    </tr>
+      <tr>
+        <td colspan="6" class="text-center text-muted">{{ t('no_visit_history') }}</td>
+      </tr>
     {% endfor %}
   </tbody>
 </table>
 
-<!-- Datalist for medicines (if you use this) -->
-<datalist id="med-list">
-  {% for n in medicine_names %}
-    <option value="{{ n }}"></option>
-  {% endfor %}
-</datalist>
+<!-- (Optional) You can remove the old datalist block -->
 
 <script>
-  // -------- Meds builder --------
+  // ===================== Shared refs =====================
   const medTbody = document.getElementById("prescription-list");
   const addMedBtn = document.getElementById("add-med-row");
+  const servicesTbody = document.getElementById('services-list');
+  const addServiceBtn = document.getElementById('add-service-row');
 
+  // ===================== Medicines data (fetch once) =====================
+  let MED_NAMES = [];
+  async function ensureMedNames() {
+    if (MED_NAMES.length) return MED_NAMES;
+    try {
+      // Expect { "results": ["Panadol", "Loratadine", ...] }
+      const r = await fetch('/api/medicines');
+      const j = await r.json();
+      MED_NAMES = (j.results || []).filter(Boolean);
+    } catch (e) {
+      console.warn('Failed to fetch /api/medicines', e);
+    }
+    return MED_NAMES;
+  }
+
+  // Simple ranking: startsWith > includes > alphabetical
+  function rankMatches(query, items, limit = 20) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return items.slice(0, limit);
+    return items
+      .map(name => {
+        const l = String(name).toLowerCase();
+        let score = Infinity;
+        if (l.startsWith(q)) score = 0;
+        else if (l.includes(q)) score = 1;
+        return { name, score };
+      })
+      .filter(x => x.score !== Infinity)
+      .sort((a,b) => a.score - b.score || a.name.localeCompare(b.name))
+      .slice(0, limit)
+      .map(x => x.name);
+  }
+
+  // ===================== Autocomplete (overlay & scrolls itself) =====================
+  function attachMedAutocomplete(inputEl) {
+    // we will create the menu right below this input; it overlays the page
+    // HTML will be built inside addMedicineRow(), we just wire events here
+    const menu = inputEl.parentElement.querySelector('.dropdown-menu');
+
+    let suggestions = [];
+    let idx = -1;
+
+    function openMenu() {
+      if (menu.hasAttribute('hidden')) menu.removeAttribute('hidden');
+      menu.classList.add('show');                 // Bootstrap open style
+      inputEl.setAttribute('aria-expanded', 'true');
+    }
+    function closeMenu() {
+      menu.classList.remove('show');
+      menu.setAttribute('hidden', '');
+      inputEl.setAttribute('aria-expanded', 'false');
+      idx = -1;
+      suggestions = [];
+      menu.innerHTML = '';
+    }
+    function render(list) {
+      suggestions = list;
+      idx = -1;
+      if (!list.length) { closeMenu(); return; }
+      menu.innerHTML = list.map((txt, i) =>
+        `<li><button type="button" class="dropdown-item${i===idx?' active':''}" data-i="${i}">${txt}</button></li>`
+      ).join('');
+      openMenu();
+    }
+    function highlight() {
+      [...menu.querySelectorAll('.dropdown-item')].forEach((btn, i) => {
+        btn.classList.toggle('active', i === idx);
+        if (i === idx) btn.scrollIntoView({ block: 'nearest' });
+      });
+    }
+    function choose(i) {
+      inputEl.value = suggestions[i];
+      closeMenu();
+      inputEl.dispatchEvent(new Event('change'));
+    }
+
+    inputEl.addEventListener('input', async () => {
+      await ensureMedNames();
+      render(rankMatches(inputEl.value, MED_NAMES, 20)); // show many; list scrolls itself
+    });
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (menu.hasAttribute('hidden')) return;
+      const max = suggestions.length - 1;
+      if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, max); highlight(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); highlight(); }
+      else if (e.key === 'Enter')  { if (idx >= 0) { e.preventDefault(); choose(idx); } }
+      else if (e.key === 'Escape') { closeMenu(); }
+    });
+
+    menu.addEventListener('mousedown', (e) => {
+      const btn = e.target.closest('.dropdown-item');
+      if (!btn) return;
+      choose(+btn.dataset.i);
+    });
+
+    // click outside closes the menu
+    document.addEventListener('click', (e) => {
+      if (!menu.contains(e.target) && e.target !== inputEl) closeMenu();
+    });
+  }
+
+  // ===================== Build rows =====================
   function addMedicineRow(prefill = null) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><input list="med-list" name="med_name" class="form-control" placeholder="{{ t('medicine_name') }}" required></td>
+      <td>
+        <!-- Overlay suggestions: absolute, z-index high; only list scrolls -->
+        <div class="position-relative w-100">
+          <input name="med_name" class="form-control"
+                 placeholder="{{ t('medicine_name') }}" autocomplete="off" required>
+          <ul class="dropdown-menu position-absolute top-100 start-0 w-100 shadow p-0"
+              style="max-height: 320px; overflow-y: auto; z-index: 2000;" hidden></ul>
+        </div>
+      </td>
       <td><input type="number" name="med_quantity" class="form-control" min="1" value="1" required></td>
       <td>
         <select name="med_dosage" class="form-select" required>
@@ -180,43 +292,38 @@
           <option value="bottle">{{ t('bottle') if t('bottle') else 'bottle' }}</option>
         </select>
       </td>
-      <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">×</button></td>
+      <td class="text-center">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">×</button>
+      </td>
     `;
     medTbody.appendChild(tr);
 
+    const nameInput = tr.querySelector('input[name="med_name"]');
+    attachMedAutocomplete(nameInput);
+
     if (prefill) {
-      tr.querySelector('[name="med_name"]').value = prefill.name || '';
-      tr.querySelector('[name="med_quantity"]').value = prefill.quantity || 1;
+      nameInput.value = prefill.name || '';
+      tr.querySelector('[name="med_quantity"]').value = (prefill.quantity ?? 1);
       if (prefill.dosage) tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
     }
   }
 
   addMedBtn.addEventListener('click', addMedicineRow);
 
-  {% if draft and draft.prescribed_meds %}
-    const draftMeds = {{ draft.prescribed_meds|tojson }};
-  {% else %}
-    const draftMeds = [];
-  {% endif %}
-
-  // -------- Services builder (clone the first row) --------
-  const servicesTbody = document.getElementById('services-list');
-  const addServiceBtn = document.getElementById('add-service-row');
-
+  // -------- Services builder --------
   function addServiceRow(prefill = null) {
     const first = servicesTbody.querySelector('tr.service-row');
     const clone = first.cloneNode(true);
-    // clear values
     clone.querySelector('select[name="service_name"]').value = '';
     clone.querySelector('input[name="service_amount"]').value = '0';
     servicesTbody.appendChild(clone);
 
     if (prefill) {
       const sel = clone.querySelector('select[name="service_name"]');
-      // if option not in catalog (legacy), append once
       if (![...sel.options].some(o => o.value === prefill.name)) {
         const opt = document.createElement('option');
-        opt.value = prefill.name; opt.textContent = prefill.name;
+        opt.value = prefill.name;
+        opt.textContent = prefill.name;
         sel.appendChild(opt);
       }
       sel.value = prefill.name || '';
@@ -232,18 +339,27 @@
     }
   });
 
+  // ===================== Draft data from server =====================
+  {% if draft and draft.prescribed_meds %}
+    const draftMeds = {{ draft.prescribed_meds | tojson }};
+  {% else %}
+    const draftMeds = [];
+  {% endif %}
+
   {% if draft and draft.services %}
-    const draftServices = {{ draft.services|tojson }};
+    const draftServices = {{ draft.services | tojson }};
   {% else %}
     const draftServices = [];
   {% endif %}
 
-  // -------- Prefill on load --------
-  window.addEventListener('DOMContentLoaded', () => {
-    if (draftMeds.length) draftMeds.forEach(addMedicineRow); else addMedicineRow();
-    // services: we already have one template row present; prefill or add a blank
+  // ===================== Prefill on load =====================
+  window.addEventListener('DOMContentLoaded', async () => {
+    await ensureMedNames();
+
+    if (draftMeds.length) draftMeds.forEach(addMedicineRow);
+    else addMedicineRow();
+
     if (draftServices.length) {
-      // fill the first row with the first service, then add clones for the rest
       const first = servicesTbody.querySelector('tr.service-row');
       const sel = first.querySelector('select[name="service_name"]');
       const amt = first.querySelector('input[name="service_amount"]');
@@ -251,7 +367,9 @@
       if (s0) {
         if (![...sel.options].some(o => o.value === s0.name)) {
           const opt = document.createElement('option');
-          opt.value = s0.name; opt.textContent = s0.name; sel.appendChild(opt);
+          opt.value = s0.name;
+          opt.textContent = s0.name;
+          sel.appendChild(opt);
         }
         sel.value = s0.name || '';
         amt.value = (s0.amount ?? 0);
