@@ -65,7 +65,7 @@
         <textarea name="notes" class="form-control" rows="3" placeholder="{{ t('notes_placeholder') }}">{{ draft.notes if draft else '' }}</textarea>
       </div>
 
-      <!-- NEW: Discharge Advice -->
+      <!-- Discharge Advice -->
       <div class="col-md-12">
         <label class="form-label">{{ t('discharge_advice') }}</label>
         <textarea name="discharge_advice" class="form-control" rows="3" placeholder="{{ t('discharge_advice_placeholder') }}">{{ draft.discharge_advice if draft else '' }}</textarea>
@@ -98,7 +98,7 @@
       <td>{{ v.condition }}</td>
       <td>
         {% for med in v.prescribed_meds %}
-          <div>{{ med.name }} ({{ med.quantity }}) - {{ med.dosage }}</div>
+          <div>{{ med.name }} — {{ med.quantity }} {{ med.dosage }}</div>
         {% endfor %}
       </td>
       <td>{{ v.notes }}</td>
@@ -127,16 +127,26 @@
     tr.innerHTML = `
       <td><input list="med-list" name="med_name" class="form-control" placeholder="{{ t('medicine_name') }}" required></td>
       <td><input type="number" name="med_quantity" class="form-control" min="1" value="1" required></td>
-      <td><input name="med_dosage" class="form-control" placeholder="e.g. 2x daily" required></td>
+      <td>
+        <select name="med_dosage" class="form-select" required>
+          <option value="" disabled selected>{{ t('select_unit') if t('select_unit') else 'Select unit' }}</option>
+          <option value="pills">{{ t('pills') if t('pills') else 'pills' }}</option>
+          <option value="grams">{{ t('grams') if t('grams') else 'grams' }}</option>
+          <option value="bottle">{{ t('bottle') if t('bottle') else 'bottle' }}</option>
+        </select>
+      </td>
       <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">×</button></td>
     `;
 
     tbody.appendChild(tr);
 
     if (prefill) {
-      tr.querySelector('[name="med_name"]').value = prefill.name;
-      tr.querySelector('[name="med_quantity"]').value = prefill.quantity;
-      tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
+      tr.querySelector('[name="med_name"]').value = prefill.name || '';
+      tr.querySelector('[name="med_quantity"]').value = prefill.quantity || 1;
+      // prefill.dosage should be one of "pills", "grams", "bottle" to auto-select
+      if (prefill.dosage) {
+        tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
+      }
     }
   }
 

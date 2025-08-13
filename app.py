@@ -165,7 +165,10 @@ translations = {
         'drug_allergies': 'Drug Allergies',
         'discharge_advice': 'Discharge Advice',
         'discharge_advice_placeholder': 'Key instructions for aftercare, red flags, lifestyle or diet advice…',
-
+        'select_unit': 'Select unit',
+        'pills': 'pills',
+        'grams': 'grams',
+        'bottle': 'bottle',
     },
     'zh': {
         'add_patient': '添加病人',
@@ -292,6 +295,10 @@ translations = {
         'drug_allergies': '药物过敏',
         'discharge_advice': '出院指导',
         'discharge_advice_placeholder': '出院后的注意事项、警示症状、生活方式或饮食建议…',
+        'select_unit': '选择单位',
+        'pills': '颗',
+        'grams': '克',
+        'bottle': '瓶',
     }
 }
 
