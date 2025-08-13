@@ -23,6 +23,18 @@ cred = credentials.Certificate("lumiere-583de-firebase-adminsdk-fbsvc-1501d71f13
 initialize_app(cred)
 db = firestore.client()
 
+# --- Multi-tenant helpers ---
+def current_uid():
+    return session.get('user')
+
+def require_login():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+def with_owner(query):
+    """Attach owner filter to a top-level collection/collection group query."""
+    return query.where('owner_id', '==', current_uid())
+
 @app.route('/')
 def home():
     return redirect(url_for('patients'))
@@ -302,54 +314,60 @@ def switch_language():
 # ================= Inventory =================
 @app.route('/api/medicines')
 def get_medicine_names():
-    meds = db.collection('medicines').stream()
+    require_login()
+    meds = with_owner(db.collection('medicines')).stream()
     names = [m.to_dict().get('name', '') for m in meds if m.to_dict().get('name')]
     return {'results': names}
 
 @app.route('/inventory')
 def inventory():
+    require_login()
     query = request.args.get('q', '').strip().lower()
-    medicines_ref = db.collection('medicines')
+
+    medicines_ref = with_owner(db.collection('medicines'))
     all_docs = medicines_ref.stream()
 
     medicines = []
     for doc in all_docs:
         data = doc.to_dict()
-        data['id'] = doc.id  # ✅ Needed for adjusting/editing
+        data['id'] = doc.id  # needed for adjusting/editing
+        text_haystack = " ".join([
+            data.get('name', ''),
+            str(data.get('barcode', ''))  # still searchable if you kept barcodes historically
+        ]).lower()
         if query:
-            if query in data.get('name', '').lower() or query in data.get('barcode', '').lower():
+            if query in text_haystack:
                 medicines.append(data)
         else:
             medicines.append(data)
 
     return render_template('inventory.html', medicines=medicines)
 
-
 @app.route('/inventory/add', methods=['GET', 'POST'])
 def add_medicine():
+    require_login()
     if request.method == 'POST':
         data = request.form.to_dict()
         data['price'] = float(data['price'])
         data['stock'] = int(data['stock'])
         data['expiry_date'] = data['expiry_date']
+        data['owner_id'] = current_uid()               # ✅ tenant tag
         db.collection('medicines').add(data)
         flash('Medicine added successfully!')
         return redirect(url_for('inventory'))
     return render_template('add_medicine.html')
 
-
 @app.route('/inventory/scan-combined', methods=['POST'])
 def scan_combined():
-    file = request.files.get('barcode_image')
+    require_login()
     manual_barcode = request.form.get('manual_barcode', '').strip()
-    barcode = manual_barcode  # fallback
+    barcode = manual_barcode
 
-    # Check barcode presence
     if not barcode:
         flash("❌ No barcode provided.")
         return redirect(url_for('inventory'))
 
-    # Get quantity and adjust type
+    # quantity
     try:
         amount = int(request.form.get('adjust_amount', 1))
         if amount < 1:
@@ -360,9 +378,9 @@ def scan_combined():
 
     adjust_type = request.form.get('adjust_type', 'increase')
 
-    # Find medicine by barcode
-    query = db.collection('medicines').where('barcode', '==', barcode).limit(1).stream()
-    med = next(query, None)
+    # Find medicine by barcode within tenant
+    med_query = with_owner(db.collection('medicines')).where('barcode', '==', barcode).limit(1).stream()
+    med = next(med_query, None)
 
     if not med:
         flash(f"❌ Medicine with barcode {barcode} not found.")
@@ -370,25 +388,18 @@ def scan_combined():
 
     doc = med.to_dict()
     current_stock = doc.get('stock', 0)
-
-    if adjust_type == 'decrease':
-        new_stock = max(current_stock - amount, 0)
-    else:
-        new_stock = current_stock + amount
-
+    new_stock = max(current_stock - amount, 0) if adjust_type == 'decrease' else current_stock + amount
     db.collection('medicines').document(med.id).update({'stock': new_stock})
 
     flash(f"✅ Stock {'decreased' if adjust_type == 'decrease' else 'increased'} by {amount}. New stock: {new_stock}")
     return redirect(url_for('inventory'))
-
-
-
 @app.route('/inventory/adjust/<id>/increase', methods=['POST'])
 def increase_stock(id):
+    require_login()
     ref = db.collection('medicines').document(id)
-    doc = ref.get()
-    if doc.exists:
-        current = doc.to_dict().get('stock', 0)
+    snap = ref.get()
+    if snap.exists and snap.to_dict().get('owner_id') == current_uid():
+        current = snap.to_dict().get('stock', 0)
         ref.update({'stock': current + 1})
         flash('✅ Stock increased by 1.')
     else:
@@ -397,54 +408,76 @@ def increase_stock(id):
 
 @app.route('/inventory/adjust/<id>/set', methods=['POST'])
 def set_stock(id):
-    new_stock = int(request.form.get('new_stock', 0))
+    require_login()
     ref = db.collection('medicines').document(id)
-    if new_stock >= 0:
-        ref.update({'stock': new_stock})
-        flash('✅ Stock updated successfully.')
-    else:
-        flash('❌ Invalid stock value.')
-    return redirect(url_for('inventory'))
+    snap = ref.get()
+    if not (snap.exists and snap.to_dict().get('owner_id') == current_uid()):
+        flash('❌ Medicine not found.')
+        return redirect(url_for('inventory'))
 
+    try:
+        new_stock = int(request.form.get('new_stock', 0))
+        if new_stock < 0:
+            raise ValueError
+    except ValueError:
+        flash('❌ Invalid stock value.')
+        return redirect(url_for('inventory'))
+
+    ref.update({'stock': new_stock})
+    flash('✅ Stock updated successfully.')
+    return redirect(url_for('inventory'))
 @app.route('/inventory/edit/<id>', methods=['GET', 'POST'])
+
 def edit_medicine(id):
-    medicine_ref = db.collection('medicines').document(id)
-    
+    require_login()
+    ref = db.collection('medicines').document(id)
+    snap = ref.get()
+    if not (snap.exists and snap.to_dict().get('owner_id') == current_uid()):
+        flash('❌ Medicine not found.')
+        return redirect(url_for('inventory'))
+
     if request.method == 'POST':
         data = request.form.to_dict()
         data['price'] = float(data['price'])
         data['stock'] = int(data['stock'])
-        data['batch_number'] = request.form.get('batch_number', '')
-        medicine_ref.update(data)
+        # ❌ do not write batch_number anymore
+        # data.pop('batch_number', None)
+        ref.update(data)
         flash('Medicine updated successfully!')
         return redirect(url_for('inventory'))
 
-    medicine = medicine_ref.get().to_dict()
-    if not medicine:
-        flash('Medicine not found!')
-        return redirect(url_for('inventory'))
-
+    medicine = snap.to_dict()
     medicine['id'] = id
     return render_template('edit_medicine.html', medicine=medicine)
 
 @app.route('/inventory/delete/<id>', methods=['POST'])
 def delete_medicine(id):
-    db.collection('medicines').document(id).delete()
-    flash('❌ Medicine deleted successfully.')
+    require_login()
+    ref = db.collection('medicines').document(id)
+    snap = ref.get()
+    if snap.exists and snap.to_dict().get('owner_id') == current_uid():
+        ref.delete()
+        flash('❌ Medicine deleted successfully.')
+    else:
+        flash('❌ Medicine not found.')
     return redirect(url_for('inventory'))
 
 
 # ================= Patients =================
 @app.route('/patients')
 def patients():
+    require_login()
     query = request.args.get('q', '').strip().lower()
-    patient_list = db.collection('patients').stream()
-    patients = []
+    patient_stream = with_owner(db.collection('patients')).stream()
 
-    for p in patient_list:
+    patients = []
+    for p in patient_stream:
         data = p.to_dict()
         data['id'] = p.id
-        visits = db.collection('patients').document(p.id).collection('visits').stream()
+        # visits count (only this user’s tagged visits — see visit tagging below)
+        visits = db.collection('patients').document(p.id).collection('visits')\
+            .where('owner_id', '==', current_uid())\
+            .stream()
         data['visit_count'] = sum(1 for _ in visits)
 
         if query:
@@ -461,40 +494,54 @@ def patients():
 
 @app.route('/patients/add', methods=['GET', 'POST'])
 def add_patient():
+    require_login()
     if request.method == 'POST':
         data = request.form.to_dict()
         data['created_at'] = datetime.now().isoformat()
         data['last_visit'] = datetime.now().isoformat()
+        data['owner_id'] = current_uid()               # ✅ tenant tag
         db.collection('patients').add(data)
         flash('Patient added!')
         return redirect(url_for('patients'))
     return render_template('add_patient.html')
 
-
 @app.route('/patients/edit/<id>', methods=['GET', 'POST'])
 def edit_patient(id):
-    patient_ref = db.collection('patients').document(id)
+    require_login()
+    ref = db.collection('patients').document(id)
+    snap = ref.get()
+
+    if not (snap.exists and snap.to_dict().get('owner_id') == current_uid()):
+        flash('❌ Patient not found.')
+        return redirect(url_for('patients'))
 
     if request.method == 'POST':
         data = request.form.to_dict()
         data['updated_at'] = datetime.now().isoformat()
-        patient_ref.update(data)
+        ref.update(data)
         flash('Patient updated successfully!')
         return redirect(url_for('patients'))
 
-    patient = patient_ref.get().to_dict()
+    patient = snap.to_dict()
     patient['id'] = id
     return render_template('edit_patient.html', patient=patient)
 
 @app.route('/patients/<id>/visits', methods=['GET', 'POST'])
 def patient_visits(id):
+    require_login()
     patient_ref = db.collection('patients').document(id)
-    patient = patient_ref.get().to_dict()
+    patient_snap = patient_ref.get()
+
+    # Ensure this patient belongs to the logged-in user
+    if not (patient_snap.exists and patient_snap.to_dict().get('owner_id') == current_uid()):
+        flash('❌ Patient not found.')
+        return redirect(url_for('patients'))
+
+    patient = patient_snap.to_dict()
     patient['id'] = id
 
     if request.method == 'POST':
         action = request.form.get('action')
-
         names = request.form.getlist('med_name')
         quantities = request.form.getlist('med_quantity')
         dosages = request.form.getlist('med_dosage')
@@ -513,61 +560,79 @@ def patient_visits(id):
             'notes': request.form.get('notes'),
             'prescribed_meds': prescribed_meds,
             'created_at': datetime.now().isoformat(),
-            'status': 'draft' if action == 'save_draft' else 'confirmed'
+            'status': 'draft' if action == 'save_draft' else 'confirmed',
+            'owner_id': current_uid()  # tenant tag on sub-doc
         }
 
-        # ❗ Always delete existing drafts first
-        drafts = patient_ref.collection('visits').where('status', '==', 'draft').stream()
+        # delete existing drafts for this owner (under this patient)
+        drafts = patient_ref.collection('visits') \
+            .where('owner_id', '==', current_uid()) \
+            .where('status', '==', 'draft').stream()
         for d in drafts:
             d.reference.delete()
 
         # Add new visit
         patient_ref.collection('visits').add(visit)
 
+        # If confirmed, enqueue for THIS user’s front desk
         if action == 'confirm' and prescribed_meds:
             db.collection('front_desk_queue').add({
                 'patient_id': id,
                 'items': prescribed_meds,
                 'status': 'waiting',
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'owner_id': current_uid()
             })
 
         flash('Visit saved as draft.' if action == 'save_draft' else 'Visit confirmed and sent to front desk.')
         return redirect(url_for('patient_visits', id=id))
 
-    # ✅ Fetch latest draft if exists
-    draft_query = patient_ref.collection('visits').where('status', '==', 'draft').limit(1).stream()
+    # latest draft (this user)
+    draft_query = patient_ref.collection('visits') \
+        .where('owner_id', '==', current_uid()) \
+        .where('status', '==', 'draft') \
+        .limit(1).stream()
     draft = next(draft_query, None)
     draft = draft.to_dict() if draft else None
 
-    # ✅ Only show confirmed visits
-    visits = patient_ref.collection('visits')\
-        .where('status', '==', 'confirmed')\
-        .order_by('date', direction=firestore.Query.DESCENDING)\
-        .stream()
-    visits = [{**v.to_dict(), 'id': v.id} for v in visits]
+    # confirmed visits (this user), ordered by date DESC
+    # ⚠️ Requires a composite index: owner_id ASC, status ASC, date DESC on collection group "visits"
+    visits_ref = patient_ref.collection('visits') \
+        .where('owner_id', '==', current_uid()) \
+        .where('status', '==', 'confirmed') \
+        .order_by('date', direction=firestore.Query.DESCENDING)
 
-    med_names = [m.to_dict().get('name') for m in db.collection('medicines').stream()]
+    visits = [{**v.to_dict(), 'id': v.id} for v in visits_ref.stream()]
 
-    return render_template('patient_visits.html', patient=patient, visits=visits, medicine_names=med_names, draft=draft)
+    # medicine names limited to this user
+    med_names = [m.to_dict().get('name')
+                 for m in with_owner(db.collection('medicines')).stream()
+                 if m.to_dict().get('name')]
 
-
+    return render_template('patient_visits.html',
+                           patient=patient,
+                           visits=visits,
+                           medicine_names=med_names,
+                           draft=draft)
 
 @app.route('/patients/delete/<id>', methods=['POST'])
 def delete_patient(id):
-    patient_ref = db.collection('patients').document(id)
+    require_login()
+    ref = db.collection('patients').document(id)
+    snap = ref.get()
 
-    # Delete all visit subcollection documents
-    visits = patient_ref.collection('visits').stream()
+    if not (snap.exists and snap.to_dict().get('owner_id') == current_uid()):
+        flash('❌ Patient not found.')
+        return redirect(url_for('patients'))
+
+    # Delete visits (only those owned by the user)
+    visits = ref.collection('visits').where('owner_id', '==', current_uid()).stream()
     for v in visits:
         v.reference.delete()
 
-    # Delete the patient document
-    patient_ref.delete()
-
-    flash('✅ Patient and all their visit records deleted.')
+    ref.delete()
+    flash('✅ Patient and their visit records deleted.')
     return redirect(url_for('patients'))
-
 
 @app.context_processor
 def inject_now():
@@ -577,8 +642,15 @@ def inject_now():
 # ================= Prescriptions =================
 @app.route('/prescriptions/create', methods=['GET', 'POST'])
 def create_prescription():
+    require_login()
     if request.method == 'POST':
         patient_id = request.form['patient_id']
+        # Verify patient belongs to owner
+        p_snap = db.collection('patients').document(patient_id).get()
+        if not (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()):
+            flash('❌ Invalid patient.')
+            return redirect(url_for('create_prescription'))
+
         total = float(request.form['total'])
         items = []
         for i in range(len(request.form.getlist('medicine_id'))):
@@ -592,29 +664,41 @@ def create_prescription():
             'patient_id': patient_id,
             'items': items,
             'total': total,
-            'timestamp': datetime.datetime.now().isoformat(),
-            'sent_to_front_desk': True
+            'timestamp': datetime.now().isoformat(),
+            'sent_to_front_desk': True,
+            'owner_id': current_uid()     # ✅
         })
         db.collection('front_desk_queue').add({
             'prescription_id': doc[1].id,
             'status': 'waiting',
-            'timestamp': datetime.datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'owner_id': current_uid()     # ✅
         })
         flash("Prescription submitted.")
         return redirect(url_for('receipt', prescription_id=doc[1].id))
 
-    medicines = db.collection('medicines').stream()
-    patients = db.collection('patients').stream()
+    medicines = list(with_owner(db.collection('medicines')).stream())
+    patients = list(with_owner(db.collection('patients')).stream())
     return render_template('create_prescription.html', medicines=medicines, patients=patients)
 
 # ================= Receipt View =================
 @app.route('/receipt/<prescription_id>')
 def receipt(prescription_id):
-    presc_doc = db.collection('prescriptions').document(prescription_id).get()
-    data = presc_doc.to_dict()
-    patient = db.collection('patients').document(data['patient_id']).get().to_dict()
+    require_login()
+    presc_ref = db.collection('prescriptions').document(prescription_id)
+    presc_doc = presc_ref.get()
+    if not (presc_doc.exists and presc_doc.to_dict().get('owner_id') == current_uid()):
+        flash('❌ Prescription not found.')
+        return redirect(url_for('patients'))
 
-    # You can predefine available services here:
+    data = presc_doc.to_dict()
+    p_ref = db.collection('patients').document(data['patient_id'])
+    p_snap = p_ref.get()
+    if not (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()):
+        flash('❌ Patient not found.')
+        return redirect(url_for('patients'))
+    patient = p_snap.to_dict()
+
     services = [
         "Consultation",
         "Acupuncture",
@@ -628,25 +712,32 @@ def receipt(prescription_id):
         patient=patient,
         items=data['items'],
         total=data['total'],
-        services=services  # pass services list to HTML
+        services=services
     )
-
-
 @app.route('/receipt/queue/<queue_id>')
 def queue_receipt(queue_id):
+    require_login()
     queue_ref = db.collection('front_desk_queue').document(queue_id)
-    queue_data = queue_ref.get().to_dict()
+    q_snap = queue_ref.get()
+    queue_data = q_snap.to_dict()
 
-    # ✅ Update status
+    if not queue_data or queue_data.get('owner_id') != current_uid():
+        flash('❌ Queue item not found.')
+        return redirect(url_for('front_desk'))
+
     queue_ref.update({'status': 'completed'})
 
-    # ✅ Build receipt
-    patient = db.collection('patients').document(queue_data['patient_id']).get().to_dict()
+    p_ref = db.collection('patients').document(queue_data['patient_id'])
+    p_snap = p_ref.get()
+    if not (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()):
+        flash('❌ Patient not found.')
+        return redirect(url_for('front_desk'))
+    patient = p_snap.to_dict()
+
     items = []
     total = 0.0
-
     for i in queue_data.get('items', []):
-        med_query = db.collection('medicines').where('name', '==', i['name']).limit(1).stream()
+        med_query = with_owner(db.collection('medicines')).where('name', '==', i['name']).limit(1).stream()
         med = next(med_query, None)
         if med:
             med_data = med.to_dict()
@@ -666,7 +757,6 @@ def queue_receipt(queue_id):
                 'subtotal': 0.0
             })
 
-    # ✅ Define available services here too
     services = [
         "Newly Diagnosed",
         "Acupuncture",
@@ -709,7 +799,7 @@ def queue_receipt(queue_id):
         patient=patient,
         items=items,
         total=round(total, 2),
-        services=services   # 🛠️ PASS SERVICES HERE
+        services=services
     )
 
 @app.route('/generate_receipt_pdf', methods=['POST'])
@@ -824,17 +914,21 @@ def generate_receipt_pdf():
 # ================= Front Desk View =================
 @app.route('/front_desk')
 def front_desk():
-    queue = db.collection('front_desk_queue').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+    require_login()
+    queue = with_owner(db.collection('front_desk_queue'))\
+        .order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
     
     waiting, prepared, completed = [], [], []
 
     for entry in queue:
         doc = entry.to_dict()
-        patient = db.collection('patients').document(doc['patient_id']).get().to_dict()
 
-        # ✅ Safeguard against missing patient
+        # Patient must also belong to this owner
+        p_ref = db.collection('patients').document(doc['patient_id'])
+        p_snap = p_ref.get()
+        patient = p_snap.to_dict() if (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()) else None
         if not patient:
-            patient = {'name': '❌ Unknown (Deleted)', 'id': doc.get('patient_id', 'N/A')}
+            patient = {'name': '❌ Unknown (Deleted/Other Tenant)', 'id': doc.get('patient_id', 'N/A')}
 
         item = {
             'id': entry.id,
@@ -852,18 +946,23 @@ def front_desk():
             completed.append(item)
 
     return render_template('front_desk.html', waiting=waiting, prepared=prepared, completed=completed)
-
 @app.route('/front_desk/update/<queue_id>/<status>')
 def update_queue_status(queue_id, status):
+    require_login()
     queue_ref = db.collection('front_desk_queue').document(queue_id)
     queue_doc = queue_ref.get().to_dict()
+
+    if not queue_doc or queue_doc.get('owner_id') != current_uid():
+        flash('❌ Queue item not found.')
+        return redirect(url_for('front_desk'))
+
     items = queue_doc.get('items', [])
     current_status = queue_doc.get('status')
 
     if status == 'completed':
-        # ✅ Decrement stock when marking as completed
+        # Decrement stock when marking as completed (only within this owner’s medicines)
         for med in items:
-            query = db.collection('medicines').where('name', '==', med['name']).limit(1).stream()
+            query = with_owner(db.collection('medicines')).where('name', '==', med['name']).limit(1).stream()
             found = next(query, None)
             if found:
                 ref = db.collection('medicines').document(found.id)
@@ -875,10 +974,10 @@ def update_queue_status(queue_id, status):
         return redirect(url_for('queue_receipt', queue_id=queue_id))
 
     elif status == 'void':
-        # ✅ Revert stock if voiding a completed order
+        # Revert stock if voiding a completed order
         if current_status == 'completed':
             for med in items:
-                query = db.collection('medicines').where('name', '==', med['name']).limit(1).stream()
+                query = with_owner(db.collection('medicines')).where('name', '==', med['name']).limit(1).stream()
                 found = next(query, None)
                 if found:
                     ref = db.collection('medicines').document(found.id)
@@ -889,26 +988,29 @@ def update_queue_status(queue_id, status):
         queue_ref.update({'status': 'waiting'})
         return redirect(url_for('front_desk'))
 
-    # 🟡 Just update status if not completed or void
+    # Just update status otherwise
     queue_ref.update({'status': status})
     return redirect(url_for('front_desk'))
+
 
 # ================= dashboard =================
 @app.route('/admin/dashboard')
 def admin_dashboard():
+    require_login()
     today = datetime.now().date().isoformat()
 
-    # Patient count
-    total_patients = len(list(db.collection('patients').stream()))
+    # Patients count
+    total_patients = len(list(with_owner(db.collection('patients')).stream()))
 
-    # Visits today
+    # Visits today (collection group filtered by owner)
     visits_today = []
-    visits_ref = db.collection_group('visits').stream()
+    visits_ref = with_owner(db.collection_group('visits')).stream()
     for v in visits_ref:
         data = v.to_dict()
         if data.get('date') == today:
             patient_id = v.reference.parent.parent.id
-            patient = db.collection('patients').document(patient_id).get().to_dict()
+            p_snap = db.collection('patients').document(patient_id).get()
+            patient = p_snap.to_dict() if (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()) else None
             visits_today.append({
                 'patient': patient['name'] if patient else 'Unknown',
                 'condition': data.get('condition'),
@@ -916,17 +1018,17 @@ def admin_dashboard():
             })
 
     # Prescriptions count
-    total_prescriptions = len(list(db.collection('prescriptions').stream()))
+    total_prescriptions = len(list(with_owner(db.collection('prescriptions')).stream()))
 
     # Low stock medicines
     low_stock = []
-    for m in db.collection('medicines').stream():
+    for m in with_owner(db.collection('medicines')).stream():
         data = m.to_dict()
         if data.get('stock', 0) <= 10:
             low_stock.append(data)
 
     # Recent completed queue items
-    completed_queue = db.collection('front_desk_queue')\
+    completed_queue = with_owner(db.collection('front_desk_queue'))\
         .where('status', '==', 'completed')\
         .order_by('timestamp', direction=firestore.Query.DESCENDING).limit(5).stream()
 
@@ -934,7 +1036,8 @@ def admin_dashboard():
     for item in completed_queue:
         doc = item.to_dict()
         pid = doc.get('patient_id')
-        patient = db.collection('patients').document(pid).get().to_dict()
+        p_snap = db.collection('patients').document(pid).get()
+        patient = p_snap.to_dict() if (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()) else None
         recent_completed.append({
             'patient_name': patient['name'] if patient else 'Unknown',
             'status': doc['status'],
@@ -953,12 +1056,14 @@ def admin_dashboard():
 
 @app.route('/admin/export/visits.csv')
 def export_visits_csv():
+    require_login()
     all_visits = []
-    patients = db.collection('patients').stream()
+    patients = with_owner(db.collection('patients')).stream()
 
     for p in patients:
         pdata = p.to_dict()
-        visits = db.collection('patients').document(p.id).collection('visits').stream()
+        visits = db.collection('patients').document(p.id).collection('visits')\
+            .where('owner_id', '==', current_uid()).stream()
         for v in visits:
             vdata = v.to_dict()
             all_visits.append({
@@ -980,11 +1085,13 @@ def export_visits_csv():
 
 @app.route('/admin/export/queue.csv')
 def export_queue_csv():
+    require_login()
     queue_data = []
-    queue = db.collection('front_desk_queue').stream()
+    queue = with_owner(db.collection('front_desk_queue')).stream()
     for q in queue:
         qdata = q.to_dict()
-        patient = db.collection('patients').document(qdata.get('patient_id')).get().to_dict()
+        p_snap = db.collection('patients').document(qdata.get('patient_id')).get()
+        patient = p_snap.to_dict() if (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()) else None
         queue_data.append({
             'Patient Name': patient['name'] if patient else 'Unknown',
             'Status': qdata.get('status'),
@@ -1003,10 +1110,12 @@ def export_queue_csv():
 # =================== Appointment ===================
 @app.route('/appointments')
 def appointments_combined():
+    require_login()
     date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
 
     # Load bookings for selected date
-    appointment_docs = db.collection('appointments').where('date', '==', date_str).stream()
+    appointment_docs = with_owner(db.collection('appointments'))\
+        .where('date', '==', date_str).stream()
     patients = []
     appointment_data = {}
     for doc in appointment_docs:
@@ -1017,7 +1126,7 @@ def appointments_combined():
         appointment_data[name] = data.get('slots', {})
 
     # Count bookings per day for calendar coloring
-    all_docs = db.collection('appointments').stream()
+    all_docs = with_owner(db.collection('appointments')).stream()
     booking_counts = defaultdict(int)
     for doc in all_docs:
         data = doc.to_dict()
@@ -1043,6 +1152,7 @@ def appointments_combined():
 
 @app.route('/appointments/save', methods=['POST'])
 def save_appointments():
+    require_login()
     form = request.form.to_dict()
     date_str = form.get('date') or datetime.now().strftime('%Y-%m-%d')
 
@@ -1061,11 +1171,13 @@ def save_appointments():
             'contact': contact,
             'slots': slots,
             'date': date_str,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'owner_id': current_uid()   # ✅
         })
         row_num += 1
 
-    for doc in db.collection('appointments').where('date', '==', date_str).stream():
+    # Replace existing for this date & owner
+    for doc in with_owner(db.collection('appointments')).where('date', '==', date_str).stream():
         doc.reference.delete()
 
     for batch in appointment_batches:
@@ -1074,14 +1186,14 @@ def save_appointments():
     flash(f"Appointments saved for {date_str}")
     return redirect(url_for('appointments_combined', date=date_str))
 
-
 @app.route('/appointments/json')
 def appointments_json():
+    require_login()
     date_str = request.args.get('date')
     if not date_str:
         return {'patients': []}
 
-    appointment_docs = db.collection('appointments').where('date', '==', date_str).stream()
+    appointment_docs = with_owner(db.collection('appointments')).where('date', '==', date_str).stream()
     result = []
     for doc in appointment_docs:
         data = doc.to_dict()
@@ -1094,24 +1206,25 @@ def appointments_json():
 
 @app.route('/appointments/delete', methods=['POST'])
 def delete_appointment():
+    require_login()
     patient_name = request.form.get('patient_name')
     date = request.form.get('date')
 
-    # Find and delete matching appointment
-    docs = db.collection('appointments') \
+    docs = with_owner(db.collection('appointments')) \
         .where('patient_name', '==', patient_name) \
         .where('date', '==', date).stream()
 
     for doc in docs:
         doc.reference.delete()
 
-    return '', 204  # No content for JS
+    return '', 204
 
 @app.route('/appointments/event_counts')
 def appointment_event_counts():
+    require_login()
     booking_counts = defaultdict(int)
 
-    all_docs = db.collection('appointments').stream()
+    all_docs = with_owner(db.collection('appointments')).stream()
     for doc in all_docs:
         data = doc.to_dict()
         date = data.get('date')
@@ -1194,10 +1307,11 @@ def settings():
 
 @app.before_request
 def check_auth():
-    # Allow access to login page and static files without login
-    allowed_routes = ['login']  
-    if request.endpoint not in allowed_routes and 'user' not in session:
+    # Allow access to login, static files, language toggle without login
+    open_endpoints = {'login', 'logout', 'switch_language', 'static'}
+    if (request.endpoint not in open_endpoints) and ('user' not in session):
         return redirect(url_for('login'))
+
 
 
 # ================= Run =================
