@@ -32,11 +32,7 @@
         {# 10:00 → 20:00 with 12-hour AM/PM labels #}
         {% for hour in range(10, 21) %}
           {% set start_display = ((hour - 1) % 12 + 1) %}
-          {% set start_suffix  = ' AM' if hour < 12 else ' PM' %}
-          {% set end_hour      = hour + 1 %}
-          {% set end_display   = ((end_hour - 1) % 12 + 1) %}
-          {% set end_suffix    = ' AM' if (end_hour < 12 or end_hour == 24) else ' PM' %}
-          <th>{{ start_display }}{{ start_suffix }} - {{ end_display }}{{ end_suffix }}</th>
+          <th>{{ start_display }}</th>
         {% endfor %}
         <th>{{ t('cancel') }}</th>
       </tr>
