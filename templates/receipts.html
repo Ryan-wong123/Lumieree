@@ -3,45 +3,49 @@
 
 <h4>{{ t('receipt_for') }} {{ patient.name }}</h4>
 
-<!-- Prescribed Medicines Section -->
-<h5>{{ t('prescribed_meds') }}</h5>
-<table class="table table-bordered">
-  <thead>
-    <tr>
-      <th>{{ t('medicine') }}</th>
-      <th>{{ t('unit_price') }}</th>
-      <th>{{ t('quantity') }}</th>
-      <th>{{ t('subtotal') }}</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% set total_medicine = namespace(value=0) %}
-    {% for i in items %}
-      {% set subtotal = i.subtotal if i.subtotal is defined else (i.unit_price * i.quantity) %}
-      {% set total_medicine.value = total_medicine.value + subtotal %}
-      <tr>
-        <td>{{ i.name }}</td>
-        <td>{{ '%.2f' % i.unit_price }}</td>
-        <td>
-          {{ i.quantity }}{% if i.unit %} {{ i.unit }}{% endif %}
-        </td>
-        <td>{{ '%.2f' % subtotal }}</td>
-      </tr>
-    {% endfor %}
-  </tbody>
-  <tfoot>
-    <tr>
-      <th colspan="3" class="text-end">{{ t('subtotal_meds') }}</th>
-      <th>${{ '%.2f' % total_medicine.value }}</th>
-    </tr>
-  </tfoot>
-</table>
-
-<!-- Services Rendered (read-only from patient visit) -->
-<h5 class="mt-4">{{ t('services_rendered') }}</h5>
-
 <form id="servicesForm" method="POST" action="/generate_receipt_pdf">
   <input type="hidden" name="patient_name" value="{{ patient.name }}">
+
+  <!-- Prescribed Medicines Section -->
+  <h5>{{ t('prescribed_meds') }}</h5>
+  <table class="table table-bordered" id="medicinesTable">
+    <thead>
+      <tr>
+        <th style="width: 5%;"></th>
+        <th>{{ t('medicine') }}</th>
+        <th>{{ t('unit_price') }}</th>
+        <th>{{ t('quantity') }}</th>
+        <th>{{ t('subtotal') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set total_medicine = namespace(value=0) %}
+      {% for i in items %}
+        {% set subtotal = i.subtotal if i.subtotal is defined else (i.unit_price * i.quantity) %}
+        {% set total_medicine.value = total_medicine.value + subtotal %}
+        <tr>
+          <td class="text-center">
+            <input type="checkbox" name="use_med_{{ loop.index }}" value="1" checked>
+          </td>
+          <td>{{ i.name }}</td>
+          <td>{{ '%.2f' % i.unit_price }}</td>
+          <td>
+            {{ i.quantity }}{% if i.unit %} {{ i.unit }}{% endif %}
+          </td>
+          <td>{{ '%.2f' % subtotal }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="4" class="text-end">{{ t('subtotal_meds') }}</th>
+        <th id="medicinesSubtotal">${{ '%.2f' % total_medicine.value }}</th>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- Services Rendered (read-only from patient visit) -->
+  <h5 class="mt-4">{{ t('services_rendered') }}</h5>
 
   {# Hidden medicine fields for the PDF route #}
   {% for i in items %}
@@ -52,10 +56,11 @@
   <input type="hidden" name="medicine_count" value="{{ items|length }}">
 
   {% set services_total = namespace(value=0) %}
-  <table class="table table-bordered">
+  <table class="table table-bordered" id="servicesTable">
     <thead>
       <tr>
-        <th style="width: 70%;">{{ t('service') }}</th>
+        <th style="width: 5%;"></th>
+        <th style="width: 65%;">{{ t('service') }}</th>
         <th style="width: 30%;">{{ t('price') }}</th>
       </tr>
     </thead>
@@ -69,16 +74,24 @@
         <!-- Hidden fields so /generate_receipt_pdf totals them as before -->
         <input type="hidden" name="service_{{ loop.index }}" value="{{ s_name }}">
         <input type="hidden" name="amount_{{ loop.index }}" value="{{ '%.2f' % s_amt }}">
-        <input type="hidden" name="use_{{ loop.index }}" value="1">
 
         <tr>
+          <td class="text-center">
+            <input type="checkbox" name="use_{{ loop.index }}" value="1" checked>
+          </td>
           <td>{{ s_name }}</td>
           <td>${{ '%.2f' % s_amt }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="2" class="text-muted">—</td></tr>
+        <tr><td colspan="3" class="text-muted">—</td></tr>
       {% endfor %}
     </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="2" class="text-end">{{ t('subtotal_services') }}</th>
+        <th id="servicesSubtotal">${{ '%.2f' % services_total.value }}</th>
+      </tr>
+    </tfoot>
   </table>
 
   {% set grand_total = (total_medicine.value if total_medicine is defined else 0) + services_total.value %}
@@ -92,6 +105,35 @@
     </tr>
   </table>
 
+  <div class="mt-3">
+    <h5>Custom description (if nothing selected)</h5>
+    <div class="mb-2">
+      <label for="custom_description" class="form-label">Description to show on receipt</label>
+      <textarea
+        id="custom_description"
+        name="custom_description"
+        class="form-control"
+        rows="2"
+        placeholder="e.g. Consultation and medication"
+      ></textarea>
+    </div>
+    <div class="mb-2">
+      <label for="custom_grand_total" class="form-label">Grand total (S$)</label>
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        id="custom_grand_total"
+        name="custom_grand_total"
+        class="form-control"
+        placeholder="Only used if no items above are selected"
+      >
+    </div>
+    <small class="text-muted">
+      If you deselect all medicines and services above, this description and amount will be used for the PDF.
+    </small>
+  </div>
+
   <div class="text-end">
     <button type="submit" class="btn btn-primary mt-3">{{ t('generate_pdf') }}</button>
   </div>
@@ -100,5 +142,63 @@
     <a href="/front_desk" class="btn btn-secondary mt-2">{{ t('back_to_queue') }}</a>
   </div>
 </form>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    function parseAmount(text) {
+      if (!text) return 0;
+      text = text.replace(/[^0-9.\-]/g, '');
+      const value = parseFloat(text);
+      return isNaN(value) ? 0 : value;
+    }
+
+    function recalcTotals() {
+      // Medicines
+      let medTotal = 0;
+      const medRows = document.querySelectorAll('#medicinesTable tbody tr');
+      medRows.forEach(row => {
+        const cb = row.querySelector('input[type="checkbox"]');
+        const subtotalCell = row.querySelector('td:last-child');
+        if (!subtotalCell) return;
+
+        const amount = parseAmount(subtotalCell.textContent);
+        if (cb && cb.checked) {
+          medTotal += amount;
+        }
+      });
+
+      // Services
+      let svcTotal = 0;
+      const svcRows = document.querySelectorAll('#servicesTable tbody tr');
+      svcRows.forEach(row => {
+        const cb = row.querySelector('input[type="checkbox"]');
+        const amountCell = row.querySelector('td:last-child');
+        if (!amountCell || !cb) return; // skip placeholder rows
+        const amount = parseAmount(amountCell.textContent);
+        if (cb.checked) {
+          svcTotal += amount;
+        }
+      });
+
+      const medSub = document.getElementById('medicinesSubtotal');
+      const svcSub = document.getElementById('servicesSubtotal');
+      const grand = document.getElementById('grandTotal');
+
+      if (medSub) medSub.textContent = '$' + medTotal.toFixed(2);
+      if (svcSub) svcSub.textContent = '$' + svcTotal.toFixed(2);
+      if (grand) grand.textContent = '$' + (medTotal + svcTotal).toFixed(2);
+    }
+
+    // Listen to all medicine + service checkboxes
+    document.querySelectorAll(
+      'input[type="checkbox"][name^="use_med_"], input[type="checkbox"][name^="use_"]'
+    ).forEach(cb => {
+      cb.addEventListener('change', recalcTotals);
+    });
+
+    // Initial calculation
+    recalcTotals();
+  });
+</script>
 
 {% endblock %}

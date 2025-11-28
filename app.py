@@ -943,6 +943,10 @@ def generate_receipt_pdf():
         qty_label = request.form.get(f'medicine_qty_{i}', '1')  # e.g. "32 grams"
         qty_num = _parse_numeric_label(qty_label, default=1)
 
+        # If the checkbox for this medicine was not ticked, skip it
+        if not request.form.get(f'use_med_{i}'):
+            continue
+
         subtotal = price * (qty_num if isinstance(qty_num, (int, float)) else 1)
         prescribed_medicines.append((name, qty_label, price, subtotal))
         medicine_total += subtotal
@@ -960,6 +964,17 @@ def generate_receipt_pdf():
                 service_total += amount
 
     grand_total = medicine_total + service_total
+
+    # If nothing is selected but a custom description and total are provided,
+    # use that single line in the receipt instead.
+    custom_desc = (request.form.get('custom_description') or '').strip()
+    custom_total_raw = request.form.get('custom_grand_total')
+    if not prescribed_medicines and not services and custom_desc and custom_total_raw:
+        custom_total = _parse_float(custom_total_raw, 0.0)
+        if custom_total >= 0:
+            services.append((custom_desc, custom_total))
+            service_total = custom_total
+            grand_total = custom_total
 
     # ---------- PDF ----------
     buffer = io.BytesIO()
