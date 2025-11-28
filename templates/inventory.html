@@ -40,15 +40,6 @@
       <td>{{ m.expiry_date }}</td>
       <td>{{ m.stock }}</td>
       <td>
-        <!-- +1 -->
-        <form method="POST" action="/inventory/adjust/{{ m.id }}/increase" class="d-inline">
-          <button class="btn btn-sm btn-primary" type="submit">+1</button>
-        </form>
-        <!-- Set Qty -->
-        <form method="POST" action="/inventory/adjust/{{ m.id }}/set" class="d-inline ms-2">
-          <input type="number" name="new_stock" min="0" class="form-control d-inline-block" style="width: 200px;" placeholder="{{ t('quantity') }}" required>
-          <button class="btn btn-sm btn-success" type="submit">{{ t('save_changes') }}</button>
-        </form>
         <!-- Edit -->
         <a href="/inventory/edit/{{ m.id }}" class="btn btn-sm btn-warning ms-2">{{ t('edit') }}</a>
       </td>
