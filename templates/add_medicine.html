@@ -8,6 +8,16 @@
   <input name="price" type="number" step="0.01" class="form-control mb-2" placeholder="{{ t('price') }}" required>
   <input name="stock" type="number" class="form-control mb-2" placeholder="{{ t('quantity') }}" required>
   <input type="date" name="expiry_date" class="form-control mb-3" required>
+
+  <!-- NEW: medicine type dropdown -->
+  <label class="form-label mt-1">{{ t('type') }}</label>
+  <select name="type" class="form-control mb-3" required>
+    <option value="" disabled selected>-- Select type --</option>
+    <option value="powder">Powder</option>
+    <option value="pill">Pill</option>
+    <option value="patch">Patch</option>
+  </select>
+
   <button class="btn btn-primary">{{ t('add_medicine') }}</button>
 </form>
 

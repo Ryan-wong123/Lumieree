@@ -8,6 +8,15 @@
   <input name="stock" type="number" value="{{ medicine.stock }}" class="form-control mb-2" placeholder="{{ t('quantity') }}" required>
   <input type="date" name="expiry_date" value="{{ medicine.expiry_date }}" class="form-control mb-3" required>
 
+  <!-- NEW: medicine type dropdown with pre-selection -->
+  <label class="form-label mt-1">{{ t('type') }}</label>
+  <select name="type" class="form-control mb-3" required>
+    <option value="" disabled {% if not medicine.type %}selected{% endif %}>-- Select type --</option>
+    <option value="powder" {% if medicine.type == 'powder' %}selected{% endif %}>Powder</option>
+    <option value="pill"   {% if medicine.type == 'pill' %}selected{% endif %}>Pill</option>
+    <option value="patch"  {% if medicine.type == 'patch' %}selected{% endif %}>Patch</option>
+  </select>
+
   <button class="btn btn-primary">{{ t('save_changes') }}</button>  
 </form>
 
