@@ -667,10 +667,23 @@ def patient_visits(id):
 
     # optional: a draft to prefill (if you keep drafts)
     draft = None
-    # ... if you already have draft lookup, keep it here
 
-    # Medicine names list for datalist (if you already have this)
-    med_names = [m.to_dict().get('name') for m in with_owner(db.collection('medicines')).stream()]
+
+    # Medicine names + price map for dynamic pricing
+    med_names = []
+    medicine_price_map = {}
+
+    for m in with_owner(db.collection('medicines')).stream():
+        d = m.to_dict()
+        name = d.get('name')
+        if not name:
+            continue
+        med_names.append(name)
+        try:
+            price = float(d.get('price', 0) or 0)
+        except (TypeError, ValueError):
+            price = 0.0
+        medicine_price_map[name] = price
 
     return render_template(
         'patient_visits.html',
@@ -678,8 +691,10 @@ def patient_visits(id):
         visits=visits,
         draft=draft,
         medicine_names=med_names,
-        service_catalog=SERVICE_CATALOG,   # ✅ pass catalog to template
+        medicine_price_map=medicine_price_map,  # 🔹 new
+        service_catalog=SERVICE_CATALOG,        # ✅ existing
     )
+
 
 @app.route('/patients/delete/<id>', methods=['POST'])
 def delete_patient(id):

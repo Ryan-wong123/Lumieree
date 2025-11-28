@@ -59,6 +59,10 @@
         </div>
         <button type="button" class="btn btn-outline-secondary mt-2" id="add-med-row">+</button>
       </div>
+      <!-- Medicine subtotal -->
+      <div class="col-md-12 text-end mt-2">
+        <strong>{{ t('subtotal_meds') }}: $<span id="meds-total">0.00</span></strong>
+      </div>
 
       <!-- Services Rendered (saved on the visit) -->
       <div class="col-md-12 mt-3">
@@ -94,6 +98,15 @@
           </table>
         </div>
         <button type="button" class="btn btn-outline-secondary mt-2" id="add-service-row">+</button>
+      </div>
+      <!-- Services subtotal -->
+      <div class="col-md-12 text-end mt-2">
+        <strong>{{ t('subtotal_services') }}: $<span id="services-total">0.00</span></strong>
+      </div>
+
+      <!-- Grand total -->
+      <div class="col-md-12 text-end mt-3">
+        <h5>{{ t('grand_total') }}: $<span id="grand-total">0.00</span></h5>
       </div>
 
       <div class="col-md-12">
@@ -184,6 +197,44 @@
   const addMedBtn = document.getElementById("add-med-row");
   const servicesTbody = document.getElementById('services-list');
   const addServiceBtn = document.getElementById('add-service-row');
+   // 🔹 Price map and total elements
+  const MED_PRICE_MAP = {{ medicine_price_map|default({})|tojson|safe }};
+  const medsTotalEl = document.getElementById('meds-total');
+  const servicesTotalEl = document.getElementById('services-total');
+  const grandTotalEl = document.getElementById('grand-total');
+
+  function recalcTotals() {
+    let medTotal = 0;
+
+    if (medTbody) {
+      medTbody.querySelectorAll('tr').forEach(tr => {
+        const nameInput = tr.querySelector('input[name="med_name"]');
+        const qtyInput  = tr.querySelector('input[name="med_quantity"]');
+        if (!nameInput || !qtyInput) return;
+
+        const name = nameInput.value.trim();
+        const qty  = parseFloat(qtyInput.value) || 0;
+        if (!name || !qty) return;
+
+        const unitPrice = MED_PRICE_MAP[name] || 0;
+        medTotal += unitPrice * qty;
+      });
+    }
+
+    let servicesTotal = 0;
+    if (servicesTbody) {
+      servicesTbody.querySelectorAll('tr.service-row').forEach(tr => {
+        const amtInput = tr.querySelector('input[name="service_amount"]');
+        if (!amtInput) return;
+        const amt = parseFloat(amtInput.value) || 0;
+        servicesTotal += amt;
+      });
+    }
+
+    if (medsTotalEl) medsTotalEl.textContent = medTotal.toFixed(2);
+    if (servicesTotalEl) servicesTotalEl.textContent = servicesTotal.toFixed(2);
+    if (grandTotalEl) grandTotalEl.textContent = (medTotal + servicesTotal).toFixed(2);
+  }
 
   // ===================== Medicines data (fetch once) =====================
   let MED_NAMES = [];
@@ -253,11 +304,14 @@
         if (i === idx) btn.scrollIntoView({ block: 'nearest' });
       });
     }
-    function choose(i) {
+        function choose(i) {
       inputEl.value = suggestions[i];
       closeMenu();
-      inputEl.dispatchEvent(new Event('change'));
+      inputEl.focus();
+      // 🔹 Recalculate when a medicine is chosen
+      if (typeof recalcTotals === 'function') recalcTotals();
     }
+
 
     inputEl.addEventListener('input', async () => {
       await ensureMedNames();
@@ -314,27 +368,44 @@
     medTbody.appendChild(tr);
 
     const nameInput = tr.querySelector('input[name="med_name"]');
+    const qtyInput  = tr.querySelector('input[name="med_quantity"]');
     attachMedAutocomplete(nameInput);
+
+    // 🔹 Recalc when name or quantity changes
+    nameInput.addEventListener('change', recalcTotals);
+    qtyInput.addEventListener('input', recalcTotals);
 
     if (prefill) {
       nameInput.value = prefill.name || '';
-      tr.querySelector('[name="med_quantity"]').value = (prefill.quantity ?? 1);
+      qtyInput.value  = (prefill.quantity ?? 1);
       if (prefill.dosage) tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
     }
+
+    // 🔹 After creating row, update totals
+    recalcTotals();
   }
 
-  addMedBtn.addEventListener('click', addMedicineRow);
+  addMedBtn.addEventListener('click', () => addMedicineRow());
+
 
   // -------- Services builder --------
-  function addServiceRow(prefill = null) {
+    function addServiceRow(prefill = null) {
     const first = servicesTbody.querySelector('tr.service-row');
     const clone = first.cloneNode(true);
-    clone.querySelector('select[name="service_name"]').value = '';
-    clone.querySelector('input[name="service_amount"]').value = '0';
+
+    // Clear values for new row
+    const sel = clone.querySelector('select[name="service_name"]');
+    const amt = clone.querySelector('input[name="service_amount"]');
+    if (sel) sel.value = '';
+    if (amt) amt.value = 0;
+
+    // 🔹 Recalc when service name or price changes
+    if (sel) sel.addEventListener('change', recalcTotals);
+    if (amt) amt.addEventListener('input', recalcTotals);
+
     servicesTbody.appendChild(clone);
 
     if (prefill) {
-      const sel = clone.querySelector('select[name="service_name"]');
       if (![...sel.options].some(o => o.value === prefill.name)) {
         const opt = document.createElement('option');
         opt.value = prefill.name;
@@ -342,17 +413,24 @@
         sel.appendChild(opt);
       }
       sel.value = prefill.name || '';
-      clone.querySelector('input[name="service_amount"]').value = (prefill.amount ?? 0);
+      amt.value = (prefill.amount ?? 0);
     }
+
+    // 🔹 After creating row, update totals
+    recalcTotals();
   }
 
-  addServiceBtn.addEventListener('click', addServiceRow);
-  servicesTbody.addEventListener('click', (e) => {
+  addServiceBtn.addEventListener('click', () => addServiceRow());
+
+
+    servicesTbody.addEventListener('click', (e) => {
     if (e.target.classList.contains('remove-service')) {
       const rows = servicesTbody.querySelectorAll('tr.service-row');
       if (rows.length > 1) e.target.closest('tr').remove();
+      recalcTotals();  // 🔹 update after removal
     }
   });
+
 
   // ===================== Draft data from server =====================
   {% if draft and draft.prescribed_meds %}
@@ -413,6 +491,16 @@
   // ===================== Prefill on load =====================
   window.addEventListener('DOMContentLoaded', async () => {
     await ensureMedNames();
+     // 🔹 Attach listeners to the initial service row as well
+    if (servicesTbody) {
+      const firstRow = servicesTbody.querySelector('tr.service-row');
+      if (firstRow) {
+        const sel0 = firstRow.querySelector('select[name="service_name"]');
+        const amt0 = firstRow.querySelector('input[name="service_amount"]');
+        if (sel0) sel0.addEventListener('change', recalcTotals);
+        if (amt0) amt0.addEventListener('input', recalcTotals);
+      }
+  }
 
     if (draftMeds.length) draftMeds.forEach(addMedicineRow);
     else addMedicineRow();
@@ -434,7 +522,8 @@
       }
       draftServices.slice(1).forEach(addServiceRow);
     }
-
+ // 🔹 Compute initial totals after prefilling
+    recalcTotals();
     // Run once on load (in case dates are pre-filled later)
     filterVisits();
   });
