@@ -1,6 +1,6 @@
 {% extends 'layout.html' %}
 {% block content %}
-
+<h4>{{ t('patients') }}</h4>
 <form method="GET" class="mb-3">
   <div class="input-group">
     <input type="text" class="form-control" name="q" placeholder="{{ t('search_patient_placeholder') }}" value="{{ request.args.get('q', '') }}">
