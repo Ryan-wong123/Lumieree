@@ -1,6 +1,32 @@
 {% extends 'layout.html' %}
 {% block content %}
 <h4>{{ t('admin_dashboard') }}</h4>
+<form method="get" class="row g-2 mb-3">
+  <div class="col-auto">
+    <label class="form-label mb-0 small">From</label>
+    <input type="date"
+           name="start_date"
+           class="form-control form-control-sm"
+           value="{{ filter_start }}">
+  </div>
+
+  <div class="col-auto">
+    <label class="form-label mb-0 small">To</label>
+    <input type="date"
+           name="end_date"
+           class="form-control form-control-sm"
+           value="{{ filter_end }}">
+  </div>
+
+  <div class="col-auto align-self-end">
+    <button type="submit" class="btn btn-sm btn-primary">
+      Apply
+    </button>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+      Reset
+    </a>
+  </div>
+</form>
 
 <!-- 🔢 KPI Cards -->
 <div class="row mb-4">

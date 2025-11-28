@@ -1138,21 +1138,34 @@ def update_queue_status(queue_id, status):
 @app.route('/admin/dashboard')
 def admin_dashboard():
     require_login()
+
+    # --- NEW: read date range from query params ---
     today = datetime.now().date().isoformat()
+    start_date = request.args.get('start_date') or today
+    end_date = request.args.get('end_date') or today
+
+    # Ensure start_date <= end_date (since they're ISO strings this works)
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
 
     # Patients count
     total_patients = len(list(with_owner(db.collection('patients')).stream()))
 
-    # Visits today (collection group filtered by owner)
-    visits_today = []
+    # Visits in selected date range (collection group filtered by owner)
+    visits_filtered = []
     visits_ref = with_owner(db.collection_group('visits')).stream()
     for v in visits_ref:
         data = v.to_dict()
-        if data.get('date') == today:
+        vdate = data.get('date')
+        if vdate and start_date <= vdate <= end_date:
             patient_id = v.reference.parent.parent.id
             p_snap = db.collection('patients').document(patient_id).get()
-            patient = p_snap.to_dict() if (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()) else None
-            visits_today.append({
+            patient = (
+                p_snap.to_dict()
+                if (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid())
+                else None
+            )
+            visits_filtered.append({
                 'patient': patient['name'] if patient else 'Unknown',
                 'condition': data.get('condition'),
                 'date': data.get('date')
@@ -1169,16 +1182,24 @@ def admin_dashboard():
             low_stock.append(data)
 
     # Recent completed queue items
-    completed_queue = with_owner(db.collection('front_desk_queue'))\
-        .where('status', '==', 'completed')\
-        .order_by('timestamp', direction=firestore.Query.DESCENDING).limit(5).stream()
+    completed_queue = (
+        with_owner(db.collection('front_desk_queue'))
+        .where('status', '==', 'completed')
+        .order_by('timestamp', direction=firestore.Query.DESCENDING)
+        .limit(5)
+        .stream()
+    )
 
     recent_completed = []
     for item in completed_queue:
         doc = item.to_dict()
         pid = doc.get('patient_id')
         p_snap = db.collection('patients').document(pid).get()
-        patient = p_snap.to_dict() if (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid()) else None
+        patient = (
+            p_snap.to_dict()
+            if (p_snap.exists and p_snap.to_dict().get('owner_id') == current_uid())
+            else None
+        )
         recent_completed.append({
             'patient_name': patient['name'] if patient else 'Unknown',
             'status': doc['status'],
@@ -1186,14 +1207,18 @@ def admin_dashboard():
             'timestamp': doc.get('timestamp', '')
         })
 
-    return render_template("admin_dashboard.html",
+    return render_template(
+        "admin_dashboard.html",
         total_patients=total_patients,
-        daily_visits=len(visits_today),
+        daily_visits=len(visits_filtered),     # now "visits in range"
         total_prescriptions=total_prescriptions,
         low_stock=low_stock,
-        today_visits=visits_today,
-        recent_completed=recent_completed
+        today_visits=visits_filtered,          # list for table
+        recent_completed=recent_completed,
+        filter_start=start_date,               # NEW: for pre-filling inputs
+        filter_end=end_date                    # NEW: for pre-filling inputs
     )
+
 
 @app.route('/admin/export/visits.csv')
 def export_visits_csv():
