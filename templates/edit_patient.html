@@ -18,10 +18,10 @@
 
   <h5>{{ t('medical_conditions') }}</h5>
 
-  {% for field in ['diabetes', 'hypertension', 'heart_disease', 'asthma', 'stroke', 'kidney_disease'] %}
+  {% for field in ['diabetes', 'hypertension', 'heart_disease', 'asthma', 'stroke', 'kidney_disease', 'High Cholesterol'] %}
   <div class="row align-items-center mb-2">
     <div class="col-md-4">
-      <label class="form-label mb-0">{{ t(field) }}?</label>
+      <label class="form-label mb-0">{{ t(field) }}</label>
     </div>
     <div class="col-md-8">
       <div class="form-check form-check-inline">
@@ -39,7 +39,7 @@
   <!-- Taking Western Medicine -->
   <div class="row align-items-center mb-2">
     <div class="col-md-4">
-      <label class="form-label mb-0">{{ t('taking_western_medicine') }}?</label>
+      <label class="form-label mb-0">{{ t('taking_western_medicine') }}</label>
     </div>
     <div class="col-md-8">
       <div class="form-check form-check-inline">

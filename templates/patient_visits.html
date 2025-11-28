@@ -12,7 +12,7 @@
     <p><strong>{{ t('dob') }}:</strong> {{ patient.dob }}</p>
     <p><strong>{{ t('gender') }}:</strong> {{ patient.gender }}</p>
     <p><strong>{{ t('medical_conditions') }}:</strong>
-      {% for condition in ['diabetes', 'hypertension', 'heart_disease', 'asthma', 'stroke', 'kidney_disease'] %}
+      {% for condition in ['diabetes', 'hypertension', 'heart_disease', 'asthma', 'stroke', 'kidney_disease', 'High Cholesterol'] %}
         {% if patient.get(condition) == 'Yes' %}
           <span class="badge bg-success">{{ t(condition) }}</span>
         {% endif %}
