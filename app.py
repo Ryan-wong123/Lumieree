@@ -16,6 +16,9 @@ from reportlab.lib import colors
 from collections import defaultdict
 import requests
 import re
+import csv
+import uuid
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -364,6 +367,31 @@ def switch_language():
     return redirect(next_page)
 
 # ================= Inventory =================
+
+def normalize_expiry_to_iso(s: str) -> str:
+    """
+    Accepts:
+      - 'YYYY-MM-DD' (returns same)
+      - 'DD/MM/YYYY' or 'D/M/YYYY' (converts)
+      - 'YYYY-MM-DDTHH:MM:SS...' (cuts to date)
+    Returns '' if cannot parse.
+    """
+    if not s:
+        return ""
+    s = str(s).strip()
+
+    # Already ISO date (or ISO datetime)
+    if re.match(r"^\d{4}-\d{2}-\d{2}", s):
+        return s[:10]
+
+    # DD/MM/YYYY or D/M/YYYY
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", s)
+    if m:
+        dd, mm, yyyy = m.group(1), m.group(2), m.group(3)
+        return f"{yyyy}-{int(mm):02d}-{int(dd):02d}"
+
+    return ""
+
 @app.route('/api/medicines')
 def get_medicine_names():
     require_login()
@@ -480,6 +508,7 @@ def set_stock(id):
     return redirect(url_for('inventory'))
 @app.route('/inventory/edit/<id>', methods=['GET', 'POST'])
 
+@app.route('/inventory/edit/<id>', methods=['GET', 'POST'])
 def edit_medicine(id):
     require_login()
     ref = db.collection('medicines').document(id)
@@ -492,15 +521,39 @@ def edit_medicine(id):
         data = request.form.to_dict()
         data['price'] = float(data['price'])
         data['stock'] = int(data['stock'])
-        # ❌ do not write batch_number anymore
-        # data.pop('batch_number', None)
+
+        # ✅ Ensure we store ISO format from the date input
+        data['expiry_date'] = normalize_expiry_to_iso(data.get('expiry_date', ''))
+
         ref.update(data)
         flash('Medicine updated successfully!')
         return redirect(url_for('inventory'))
 
     medicine = snap.to_dict()
+    medicine['expiry_date'] = normalize_expiry_to_iso(medicine.get('expiry_date', ''))
     medicine['id'] = id
-    return render_template('edit_medicine.html', medicine=medicine)
+
+    #Default dropdown options (your base code)
+    DEFAULT_TYPES = ["Powder", "Pill", "Patch"]
+
+    types = set(DEFAULT_TYPES)
+
+    # Add any extra types found in DB
+    for m in with_owner(db.collection('medicines')).stream():
+        t = (m.to_dict().get('type') or '').strip()
+        if t:
+            types.add(t)
+
+    types = sorted(types)
+
+
+    return render_template(
+        'edit_medicine.html',
+        medicine=medicine,
+        medicine_types=types   
+    )
+
+
 
 @app.route('/inventory/delete/<id>', methods=['POST'])
 def delete_medicine(id):
@@ -1485,6 +1538,144 @@ def settings():
 
     return render_template('settings.html')
 
+# import medicine
+
+def _norm(s):
+    return (str(s).strip() if s is not None else "")
+
+def _to_int(val, default=0):
+    try:
+        return int(float(str(val).strip()))
+    except Exception:
+        return default
+
+def _to_float(val, default=0.0):
+    try:
+        return float(str(val).strip())
+    except Exception:
+        return default
+
+def _get_ci(row: dict, key: str):
+    key = key.lower()
+    for k in row.keys():
+        if k and k.strip().lower() == key:
+            return row.get(k)
+    return None
+
+def _gen_sku():
+    return "TCM-" + uuid.uuid4().hex[:8].upper()
+
+def _flush_medicine_batch(pending_ops):
+    batch = db.batch()
+    added = 0
+    updated = 0
+
+    for op, doc_id, data in pending_ops:
+        if op == "update" and doc_id:
+            ref = db.collection("medicines").document(doc_id)
+            batch.set(ref, data, merge=True)
+            updated += 1
+        else:
+            ref = db.collection("medicines").document()
+            batch.set(ref, data, merge=True)
+            added += 1
+
+    batch.commit()
+    return added, updated
+
+
+@app.route("/inventory/import_csv", methods=["POST"])
+def import_inventory_csv():
+    require_login()
+
+    f = request.files.get("csv_file")
+    if not f or not f.filename:
+        flash("❌ Please choose a CSV file.")
+        return redirect(url_for("inventory"))
+
+    if not f.filename.lower().endswith(".csv"):
+        flash("❌ File must be a .csv")
+        return redirect(url_for("inventory"))
+
+    try:
+        stream = (line.decode("utf-8-sig") for line in f.stream)
+        reader = csv.DictReader(stream)
+        rows = list(reader)
+    except Exception as e:
+        flash(f"❌ CSV read error: {e}")
+        return redirect(url_for("inventory"))
+
+    if not rows:
+        flash("❌ CSV is empty.")
+        return redirect(url_for("inventory"))
+
+    owner = current_uid()
+    added = updated = skipped = 0
+    pending = []
+    BATCH_LIMIT = 450
+
+    for r in rows:
+        sku_id = _norm(_get_ci(r, "sku_id"))
+        name = _norm(_get_ci(r, "name"))
+        company = _norm(_get_ci(r, "company"))
+        med_type = _norm(_get_ci(r, "type"))
+        expiry_date = normalize_expiry_to_iso(_norm(_get_ci(r, "expiry_date")))
+        price = _to_float(_get_ci(r, "price"), 0.0)
+        quantity = _to_int(_get_ci(r, "quantity"), 0)
+
+        if not name:
+            skipped += 1
+            continue
+
+        match = None
+
+        # 1️⃣ Try sku_id match (best)
+        if sku_id:
+            q = with_owner(db.collection("medicines")).where("sku_id", "==", sku_id)
+            match = next(q.limit(1).stream(), None)
+
+        # 2️⃣ Fallback match (for CSVs without sku_id)
+        if not match:
+            q = with_owner(db.collection("medicines")) \
+                .where("name", "==", name) \
+                .where("company", "==", company) \
+                .where("type", "==", med_type) \
+                .where("expiry_date", "==", expiry_date)
+            match = next(q.limit(1).stream(), None)
+
+        # 3️⃣ Auto-generate sku_id if needed
+        if not sku_id:
+            sku_id = match.to_dict().get("sku_id") if match else _gen_sku()
+
+        data = {
+            "sku_id": sku_id,
+            "name": name,
+            "company": company,
+            "type": med_type,
+            "price": price,
+            "stock": quantity,
+            "expiry_date": expiry_date,
+            "owner_id": owner
+        }
+
+        if match:
+            pending.append(("update", match.id, data))
+        else:
+            pending.append(("add", None, data))
+
+        if len(pending) >= BATCH_LIMIT:
+            a, u = _flush_medicine_batch(pending)
+            added += a
+            updated += u
+            pending = []
+
+    if pending:
+        a, u = _flush_medicine_batch(pending)
+        added += a
+        updated += u
+
+    flash(f"✅ Import done. Added: {added}, Updated: {updated}, Skipped: {skipped}")
+    return redirect(url_for("inventory"))
 
 @app.before_request
 def check_auth():

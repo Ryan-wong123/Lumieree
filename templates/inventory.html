@@ -6,27 +6,38 @@
 <!-- 🔍 Search Bar with Scan Button -->
 <form method="GET" action="/inventory" id="search-form" class="mb-4">
   <div class="input-group">
-    <input type="text" name="q" id="search-barcode" class="form-control" placeholder="{{ t('search_placeholder') }}" value="{{ request.args.get('q', '') }}">
-    <button type="button" id="search-scan-btn" class="btn btn-outline-primary" onclick="toggleLiveScanner('search-barcode', 'search-form', this)">
+    <input type="text" name="q" id="search-barcode" class="form-control" placeholder="{{ t('search_placeholder') }}"
+      value="{{ request.args.get('q', '') }}">
+    <button type="button" id="search-scan-btn" class="btn btn-outline-primary"
+      onclick="toggleLiveScanner('search-barcode', 'search-form', this)">
       <i class="bi bi-camera"></i> {{ t('scan') }}
     </button>
   </div>
 </form>
+<!-- CSV Import -->
+<form method="POST" action="/inventory/import_csv" enctype="multipart/form-data" class="d-inline">
+  <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" style="display:none"
+    onchange="this.form.submit()" />
+  <button type="button" class="btn btn-outline-secondary mb-3" onclick="document.getElementById('csv_file').click()">
+    Import CSV
+  </button>
+</form>
+
 
 <!-- 🛆 Inventory Table -->
 <a href="/inventory/add" class="btn btn-success mb-3">{{ t('add_medicine') }}</a>
 {% set grouped = {} %}
 {% for m in medicines %}
-  {% set name = m.name %}
-  {% if name not in grouped %}
-    {% set _ = grouped.update({name: []}) %}
-  {% endif %}
-  {% set _ = grouped[name].append(m) %}
+{% set name = m.name %}
+{% if name not in grouped %}
+{% set _ = grouped.update({name: []}) %}
+{% endif %}
+{% set _ = grouped[name].append(m) %}
 {% endfor %}
 
 {% for name, batch_list in grouped.items() %}
-  <h5 class="mt-4">{{ name }}</h5>
-  <table class="table table-bordered">
+<h5 class="mt-4">{{ name }}</h5>
+<table class="table table-bordered">
   <thead>
     <tr>
       <th>{{ t('expiry_date') }}</th>
@@ -54,7 +65,13 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   const html5QrCode = new Html5Qrcode("live-reader");
-  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+  const config = {
+    fps: 10,
+    qrbox: {
+      width: 250,
+      height: 250
+    }
+  };
   let cameraRunning = false;
   let targetInputId = null;
   let autoSubmitFormId = null;
@@ -79,7 +96,11 @@
         document.getElementById("scan-instruction").style.display = "block";
         updateScanButton(true);
 
-        await html5QrCode.start({ deviceId: { exact: backCam.id } }, config, onScanSuccess);
+        await html5QrCode.start({
+          deviceId: {
+            exact: backCam.id
+          }
+        }, config, onScanSuccess);
         cameraRunning = true;
       } else {
         alert("No camera found.");
@@ -105,11 +126,13 @@
   function updateScanButton(scanning) {
     if (!activeScanButton) return;
     if (scanning) {
-      activeScanButton.innerHTML = '<i class="bi bi-stop-circle"></i> {{ t('stop_scanning') }}';
+      activeScanButton.innerHTML = '<i class="bi bi-stop-circle"></i> {{ t('
+      stop_scanning ') }}';
       activeScanButton.classList.remove("btn-outline-primary");
       activeScanButton.classList.add("btn-outline-danger");
     } else {
-      activeScanButton.innerHTML = '<i class="bi bi-camera"></i> {{ t('scan') }}';
+      activeScanButton.innerHTML = '<i class="bi bi-camera"></i> {{ t('
+      scan ') }}';
       activeScanButton.classList.remove("btn-outline-danger");
       activeScanButton.classList.add("btn-outline-primary");
       activeScanButton = null;

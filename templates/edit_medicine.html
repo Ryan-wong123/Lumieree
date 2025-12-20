@@ -3,31 +3,38 @@
 <h4>{{ t('edit_medicine') }}</h4>
 
 <form method="POST">
-  <input name="name" value="{{ medicine.name }}" class="form-control mb-2" placeholder="{{ t('medicine_name') }}" required>
-  <input name="price" type="number" step="0.01" value="{{ medicine.price }}" class="form-control mb-2" placeholder="{{ t('price') }}" required>
-  <input name="stock" type="number" value="{{ medicine.stock }}" class="form-control mb-2" placeholder="{{ t('quantity') }}" required>
-  <input type="date" name="expiry_date" value="{{ medicine.expiry_date }}" class="form-control mb-3" required>
-  <input
-  name="company"
-  class="form-control mb-2"
-  placeholder="Company"
-  value="{{ medicine.company|default('') }}"
-  required
->
+  <input name="name" value="{{ medicine.name }}" class="form-control mb-2" placeholder="{{ t('medicine_name') }}"
+    required>
+  <input name="price" type="number" step="0.01" value="{{ medicine.price }}" class="form-control mb-2"
+    placeholder="{{ t('price') }}" required>
+  <input name="stock" type="number" value="{{ medicine.stock }}" class="form-control mb-2"
+    placeholder="{{ t('quantity') }}" required>
+  <input type="date" name="expiry_date" value="{{ (medicine.expiry_date|string)[:10] if medicine.expiry_date else '' }}"
+    class="form-control mb-3" required>
+
+  <input name="company" class="form-control mb-2" placeholder="Company" value="{{ medicine.company|default('') }}"
+    required>
 
   <!-- NEW: medicine type dropdown with pre-selection -->
   <label class="form-label mt-1">{{ t('type') }}</label>
   <select name="type" class="form-control mb-3" required>
-    <option value="" disabled {% if not medicine.type %}selected{% endif %}>-- Select type --</option>
-    <option value="powder" {% if medicine.type == 'powder' %}selected{% endif %}>Powder</option>
-    <option value="pill"   {% if medicine.type == 'pill' %}selected{% endif %}>Pill</option>
-    <option value="patch"  {% if medicine.type == 'patch' %}selected{% endif %}>Patch</option>
+    {% set cur = (medicine.type|default('')|string|lower) %}
+
+    <option value="" disabled {% if not cur %}selected{% endif %}>-- Select type --</option>
+
+    {% for t in medicine_types %}
+    <option value="{{ t }}" {% if t|lower == cur %}selected{% endif %}>
+      {{ t }}
+    </option>
+    {% endfor %}
   </select>
 
-  <button class="btn btn-primary">{{ t('save_changes') }}</button>  
+
+  <button class="btn btn-primary">{{ t('save_changes') }}</button>
 </form>
 
-<form method="POST" action="/inventory/delete/{{ medicine.id }}" onsubmit="return confirm('{{ t('confirm_delete_medicine') }}');">
+<form method="POST" action="/inventory/delete/{{ medicine.id }}"
+  onsubmit="return confirm('{{ t('confirm_delete_medicine') }}');">
   <button class="btn btn-danger mt-2">🗑️ {{ t('delete_medicine') }}</button>
 </form>
 
