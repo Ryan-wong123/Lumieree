@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h3>Edit User</h3>
+
+<div class="mb-3">
+  <div><strong>UID:</strong> {{ u.uid }}</div>
+  <div><strong>Email:</strong> {{ u.email or "N/A" }}</div>
+</div>
+
+<form method="POST" style="max-width:520px;">
+  <div class="mb-3">
+    <label class="form-label">Role</label>
+    <select class="form-select" name="role">
+      <option value="staff" {% if u.role == "staff" %}selected{% endif %}>staff</option>
+      <option value="admin" {% if u.role == "admin" %}selected{% endif %}>admin</option>
+      <option value="super_admin" {% if u.role == "super_admin" %}selected{% endif %}>super_admin</option>
+    </select>
+    <div class="form-text">Be careful giving super_admin.</div>
+  </div>
+
+  <div class="form-check mb-3">
+    <input class="form-check-input" type="checkbox" name="active" id="active"
+           {% if u.active %}checked{% endif %}>
+    <label class="form-check-label" for="active">Active (can login)</label>
+  </div>
+
+  <hr>
+
+  <h5>Auth Settings (Optional)</h5>
+
+  <div class="mb-3">
+    <label class="form-label">Change Email</label>
+    <input class="form-control" name="new_email" placeholder="newemail@example.com">
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Reset Password</label>
+    <input class="form-control" name="new_password" type="password" placeholder="New password">
+  </div>
+
+  <button class="btn btn-success">Save Changes</button>
+  <a class="btn btn-secondary" href="{{ url_for('admin_users') }}">Back</a>
+</form>
+
+{% endblock %}

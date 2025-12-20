@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block content %}
+<h3>Super Admin – User Management</h3>
+
+<a class="btn btn-primary mb-3" href="{{ url_for('admin_users_create') }}">
+  ➕ Create New User
+</a>
+
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>User</th>
+      <th>Role</th>
+      <th>Active</th>
+      <th>Created By</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>
+        <strong>{{ u.email }}</strong><br>
+        <small class="text-muted">{{ u.uid }}</small>
+      </td>
+      <td>{{ u.role }}</td>
+      <td>{{ u.active }}</td>
+      <td>{{ u.created_by }}</td>
+      <td>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_user_edit', uid=u.uid) }}">
+          Edit
+        </a>
+      </td>
+
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

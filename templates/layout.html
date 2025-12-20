@@ -45,13 +45,21 @@
             <a class="nav-link {% if request.path.startswith('/settings') %}active{% endif %}"
               href="/settings">{{ t('settings') }}</a>
           </li>
+          {% if session.get('role') == 'super_admin' %}
+          <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith('/admin/users') %}active{% endif %}"
+              href="{{ url_for('admin_users') }}">
+              👑 Super Admin
+            </a>
+          </li>
+          {% endif %}
           <li>
             <form class="d-flex" method="POST" action="{{ url_for('switch_language') }}">
               <input type="hidden" name="next" value="{{ request.path }}">
               <button class="btn btn-outline-light" type="submit">
                 🌐 {{ '中文' if g.get('lang', 'en') == 'en' else 'English' }}
               </button>
-            </form>  
+            </form>
           </li>
         </ul>
       </div>
@@ -72,60 +80,60 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
-  (function () {
-    let isDirty = false;
+    (function () {
+      let isDirty = false;
 
-    // Types we don't care about for dirty tracking
-    const ignoreTypes = new Set(['submit', 'button', 'hidden', 'file', 'image', 'reset']);
+      // Types we don't care about for dirty tracking
+      const ignoreTypes = new Set(['submit', 'button', 'hidden', 'file', 'image', 'reset']);
 
-    function handleFieldChange(event) {
-      const el = event.target;
+      function handleFieldChange(event) {
+        const el = event.target;
 
-      if (!(el instanceof HTMLInputElement ||
+        if (!(el instanceof HTMLInputElement ||
             el instanceof HTMLTextAreaElement ||
             el instanceof HTMLSelectElement)) {
-        return;
-      }
-
-      // Ignore some input types
-      if (el.tagName === 'INPUT' && ignoreTypes.has(el.type)) {
-        return;
-      }
-
-      // Decide if this field is "changed"
-      if (el.type === 'checkbox' || el.type === 'radio') {
-        if (el.checked !== el.defaultChecked) {
-          isDirty = true;
+          return;
         }
-      } else {
-        // For text/select/etc: compare current value with initial value
-        if (el.value !== el.defaultValue && el.value.trim() !== '') {
-          isDirty = true;
+
+        // Ignore some input types
+        if (el.tagName === 'INPUT' && ignoreTypes.has(el.type)) {
+          return;
+        }
+
+        // Decide if this field is "changed"
+        if (el.type === 'checkbox' || el.type === 'radio') {
+          if (el.checked !== el.defaultChecked) {
+            isDirty = true;
+          }
+        } else {
+          // For text/select/etc: compare current value with initial value
+          if (el.value !== el.defaultValue && el.value.trim() !== '') {
+            isDirty = true;
+          }
         }
       }
-    }
 
-    function handleBeforeUnload(e) {
-      if (!isDirty) return;
+      function handleBeforeUnload(e) {
+        if (!isDirty) return;
 
-      // Modern browsers ignore custom strings and show their own message.
-      e.preventDefault();
-      e.returnValue = '';
-    }
+        // Modern browsers ignore custom strings and show their own message.
+        e.preventDefault();
+        e.returnValue = '';
+      }
 
-    // Any input/change on any input/textarea/select will mark the page dirty.
-    document.addEventListener('input', handleFieldChange, true);
-    document.addEventListener('change', handleFieldChange, true);
+      // Any input/change on any input/textarea/select will mark the page dirty.
+      document.addEventListener('input', handleFieldChange, true);
+      document.addEventListener('change', handleFieldChange, true);
 
-    // If any form is submitted, we consider data "saved" and suppress warning
-    document.addEventListener('submit', function () {
-      isDirty = false;
-    }, true);
+      // If any form is submitted, we consider data "saved" and suppress warning
+      document.addEventListener('submit', function () {
+        isDirty = false;
+      }, true);
 
-    // Attach the beforeunload handler
-    window.addEventListener('beforeunload', handleBeforeUnload);
-  })();
-</script>
+      // Attach the beforeunload handler
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    })();
+  </script>
 
 
 </body>

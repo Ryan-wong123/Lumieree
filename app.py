@@ -19,6 +19,7 @@ import re
 import csv
 import uuid
 from werkzeug.utils import secure_filename
+import click
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -1480,8 +1481,9 @@ def appointment_event_counts():
 def login():
     if request.method == 'POST':
         username = request.form['username'].strip()
-        email = f"{username}@gmail.com"  # Automatically append domain
+        email = f"{username}@gmail.com"
         password = request.form['password']
+
         try:
             payload = {
                 'email': email,
@@ -1493,15 +1495,271 @@ def login():
                 json=payload
             )
             res = r.json()
+
             if "idToken" in res:
-                session['user'] = res['localId']
+                uid = res['localId']
+                session['user'] = uid
+
+                user_doc = db.collection("users").document(uid).get()
+                role = user_doc.to_dict().get("role", "staff") if user_doc.exists else "staff"
+                session['role'] = role
+
                 flash("✅ Login successful.")
-                return redirect(url_for('patients'))
+
+                if role == "super_admin":
+                    return redirect(url_for("admin_users"))
+
+                return redirect(url_for("patients"))
+
             else:
                 flash("❌ Invalid credentials.")
+
         except Exception as e:
             flash(f"❌ Error: {str(e)}")
+
     return render_template('login.html')
+
+
+def require_super_admin():
+    if session.get("role") != "super_admin":
+        flash("❌ Access denied.")
+        return redirect(url_for("patients"))
+    return None
+
+@app.route("/admin/users")
+def admin_users():
+    require_login()
+    deny = require_super_admin()
+    if deny: return deny
+
+    users = []
+    for doc in db.collection("users").stream():
+        d = doc.to_dict()
+        d["uid"] = doc.id
+        users.append(d)
+
+    return render_template("admin_users.html", users=users)
+
+@app.route("/admin/users/create", methods=["GET", "POST"])
+def admin_users_create():
+    require_login()
+    deny = require_super_admin()
+    if deny: return deny
+
+    if request.method == "POST":
+        email = request.form["email"].strip()
+        password = request.form["password"]
+        role = request.form["role"]
+
+        new_user = auth.create_user(email=email, password=password)
+
+        db.collection("users").document(new_user.uid).set({
+            "email": email,                 # ✅ REQUIRED
+            "role": role,
+            "created_by": session.get("user"),
+            "created_at": datetime.now().isoformat(),
+            "active": True
+        })
+
+
+        flash("✅ User created.")
+        return redirect(url_for("admin_users"))
+
+    return render_template("create_user.html")
+
+def require_admin():
+    if session.get("role") not in ("admin", "super_admin"):
+        flash("❌ Access denied.")
+        return redirect(url_for("home"))
+@app.route("/admin/users/create", methods=["GET", "POST"])
+def create_user():
+    require_login()
+    if require_super_admin():
+        return require_super_admin()
+
+    if request.method == "POST":
+        email = request.form["email"]
+        password = request.form["password"]
+        role = request.form["role"]
+
+        new_user = auth.create_user(
+            email=email,
+            password=password
+        )
+
+        db.collection("users").document(new_user.uid).set({
+            "role": role,
+            "created_by": session["user"],
+            "created_at": datetime.now().isoformat(),
+            "active": True
+        })
+
+        flash("✅ User created successfully.")
+        return redirect(url_for("list_users"))
+
+    return render_template("create_user.html")
+@app.route("/admin/users")
+def list_users():
+    require_login()
+    if require_super_admin():
+        return require_super_admin()
+
+    users = []
+    for doc in db.collection("users").stream():
+        d = doc.to_dict()
+        uid = doc.id
+        d["uid"] = uid
+
+        # 🔹 Backfill email if missing
+        if not d.get("email"):
+            try:
+                auth_user = auth.get_user(uid)
+                d["email"] = auth_user.email
+
+                # Optional: save back to Firestore so next load is fast
+                db.collection("users").document(uid).update({
+                    "email": auth_user.email
+                })
+            except Exception:
+                d["email"] = "Unknown"
+
+        users.append(d)
+
+
+    return render_template("users.html", users=users)
+
+@app.cli.command("create-super-admin")
+@click.option("--email", prompt=True, help="Email for the super admin")
+@click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True,
+              help="Password for the super admin")
+
+# create new super admin user
+# CLI cmd: flask create-super-admin --email superadmin@gmail.com --password Admin123
+def create_super_admin_cli(email, password):
+    """Create a Super Admin user (CLI)"""
+
+    try:
+        # Check if user already exists
+        existing = auth.get_user_by_email(email)
+        print(f"⚠️ User already exists: {existing.uid}")
+        return
+
+    except auth.UserNotFoundError:
+        user = auth.create_user(
+            email=email,
+            password=password
+        )
+
+        db.collection("users").document(user.uid).set({
+            "role": "super_admin",
+            "created_by": "system",
+            "created_at": datetime.now().isoformat(),
+            "active": True
+        })
+
+        print("✅ Super Admin created:", user.uid)
+
+@app.route("/admin/users/<uid>/edit", methods=["GET", "POST"])
+def admin_user_edit(uid):
+    # --- Auth guards ---
+    require_login()
+    deny = require_super_admin()
+    if deny:
+        return deny
+
+    # --- Load user record from Firestore ---
+    ref = db.collection("users").document(uid)
+    snap = ref.get()
+    if not snap.exists:
+        flash("❌ User record not found.")
+        return redirect(url_for("admin_users"))
+
+    user_data = snap.to_dict() or {}
+    # ✅ Backfill email if missing (so edit page can show it)
+    if not user_data.get("email"):
+        try:
+            auth_user = auth.get_user(uid)
+            if auth_user.email:
+                user_data["email"] = auth_user.email
+                # optional: save into Firestore so next time it’s there
+                ref.update({"email": auth_user.email})
+        except Exception:
+            user_data["email"] = None
+
+
+    if request.method == "POST":
+        # --- Read form values ---
+        new_role = request.form.get("role", user_data.get("role", "staff")).strip()
+        active = True if request.form.get("active") == "on" else False
+        new_email = (request.form.get("new_email") or "").strip()
+        new_password = (request.form.get("new_password") or "").strip()
+
+        # --- Safety: prevent disabling yourself ---
+        if uid == session.get("user") and not active:
+            flash("❌ You cannot disable your own account.")
+            return redirect(url_for("admin_user_edit", uid=uid))
+
+        # --- Safety: prevent removing the LAST super_admin ---
+        # If you're changing role away from super_admin OR disabling a super_admin,
+        # ensure there will still be at least one active super_admin left.
+        is_target_super_admin = (user_data.get("role") == "super_admin")
+        removing_super = is_target_super_admin and (new_role != "super_admin")
+        disabling_super = is_target_super_admin and (not active)
+
+        if removing_super or disabling_super:
+            # Count active super_admins
+            super_admin_count = 0
+            for doc in db.collection("users").where("role", "==", "super_admin").stream():
+                d = doc.to_dict() or {}
+                if d.get("active", True):
+                    super_admin_count += 1
+
+            # If target is currently an active super admin, then this action would reduce count by 1
+            # (unless it was already inactive)
+            target_is_active = user_data.get("active", True)
+            would_reduce = target_is_active and (removing_super or disabling_super)
+
+            if would_reduce and super_admin_count <= 1:
+                flash("❌ You cannot remove/disable the last active super admin.")
+                return redirect(url_for("admin_user_edit", uid=uid))
+
+        # --- Apply Firebase Auth updates (email/password) if provided ---
+        try:
+            auth_updates = {}
+            if new_email:
+                auth_updates["email"] = new_email
+            if new_password:
+                auth_updates["password"] = new_password
+
+            if auth_updates:
+                auth.update_user(uid, **auth_updates)
+
+            # --- Update Firestore user profile ---
+            updates = {
+                "role": new_role,
+                "active": active,
+                "updated_at": datetime.now().isoformat(),
+                "updated_by": session.get("user"),
+            }
+            if new_email:
+                updates["email"] = new_email  # keep Firestore in sync for display/search
+
+            ref.update(updates)
+
+            flash("✅ User updated.")
+            return redirect(url_for("admin_users"))
+
+        except Exception as e:
+            flash(f"❌ Update failed: {str(e)}")
+            # fall through to re-render the page with current data
+
+        # reload latest data if something changed partially
+        snap = ref.get()
+        user_data = snap.to_dict() or {}
+
+    # --- GET (or failed POST): render edit page ---
+    return render_template("edit_user.html", u={"uid": uid, **user_data})
+
 
 @app.route('/logout')
 def logout():

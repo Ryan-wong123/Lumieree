@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block content %}
+<h3>Create User</h3>
+
+<form method="POST" style="max-width:400px;">
+  <div class="mb-2">
+    <label>Email</label>
+    <input class="form-control" name="email" required>
+  </div>
+
+  <div class="mb-2">
+    <label>Password</label>
+    <input class="form-control" name="password" type="password" required>
+  </div>
+
+  <div class="mb-3">
+    <label>Role</label>
+    <select class="form-select" name="role">
+      <option value="staff">staff</option>
+      <option value="admin">admin</option>
+    </select>
+  </div>
+
+  <button class="btn btn-success">Create</button>
+  <a class="btn btn-secondary" href="{{ url_for('admin_users') }}">Back</a>
+</form>
+{% endblock %}
