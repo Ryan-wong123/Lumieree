@@ -3,16 +3,16 @@
 <h3>Super Admin – User Management</h3>
 
 <a class="btn btn-primary mb-3" href="{{ url_for('admin_users_create') }}">
-  ➕ Create New User
+  ➕ {{ t('create_new_user') }}
 </a>
 
 <table class="table table-bordered">
   <thead>
     <tr>
-      <th>User</th>
-      <th>Role</th>
-      <th>Active</th>
-      <th>Created By</th>
+      <th>{{ t('user') }}</th>
+      <th>{{ t('role') }}</th>
+      <th>{{ t('active') }}</th>
+      <th>{{ t('created_by') }}</th>
     </tr>
   </thead>
   <tbody>
@@ -27,7 +27,7 @@
       <td>{{ u.created_by }}</td>
       <td>
         <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_user_edit', uid=u.uid) }}">
-          Edit
+          ✏️ {{ t('edit') }}
         </a>
       </td>
 

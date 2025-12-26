@@ -19,7 +19,7 @@
   <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" style="display:none"
     onchange="this.form.submit()" />
   <button type="button" class="btn btn-outline-secondary mb-3" onclick="document.getElementById('csv_file').click()">
-    Import CSV
+    <i class="bi bi-file-earmark-arrow-up"></i> {{ t('importcsv') }}
   </button>
 </form>
 

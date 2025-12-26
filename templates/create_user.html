@@ -1,27 +1,27 @@
 {% extends "layout.html" %}
 {% block content %}
-<h3>Create User</h3>
+<h3>{{ t('create_new_user') }}</h3>
 
 <form method="POST" style="max-width:400px;">
   <div class="mb-2">
-    <label>Email</label>
+    <label>{{ t('email') }}</label>
     <input class="form-control" name="email" required>
   </div>
 
   <div class="mb-2">
-    <label>Password</label>
+    <label>{{ t('password') }}</label>
     <input class="form-control" name="password" type="password" required>
   </div>
 
   <div class="mb-3">
-    <label>Role</label>
+    <label>{{ t('role') }}</label>
     <select class="form-select" name="role">
-      <option value="staff">staff</option>
-      <option value="admin">admin</option>
+      <option value="{{ t('staff') }}">{{ t('staff') }}</option>
+      <option value="{{ t('admin') }}">{{ t('admin') }}</option>
     </select>
   </div>
 
-  <button class="btn btn-success">Create</button>
-  <a class="btn btn-secondary" href="{{ url_for('admin_users') }}">Back</a>
+  <button class="btn btn-success">{{ t('submit') }}</button>
+  <a class="btn btn-secondary" href="{{ url_for('admin_users') }}">{{ t('back') }}</a>
 </form>
 {% endblock %}
