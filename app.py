@@ -1122,11 +1122,12 @@ def generate_receipt_pdf():
     p.setFont("Helvetica", 10)
 
     # Medicines rows
-    for name, qty_label, price, subtotal in prescribed_medicines:
+    if medicine_total > 0:
         y_cursor -= row_height
         p.line(table_left, y_cursor, table_right, y_cursor)
-        p.drawString(table_left + 10, y_cursor + 5, f"{name} ({qty_label} @ ${price:.2f})")
-        p.drawRightString(table_right - 10, y_cursor + 5, f"{subtotal:.2f}")
+        p.drawString(table_left + 10, y_cursor + 5, "Medicines")
+        p.drawRightString(table_right - 10, y_cursor + 5, f"{medicine_total:.2f}")
+
 
     # Services rows
     for name, amount in services:
