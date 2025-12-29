@@ -1,4 +1,4 @@
-﻿sku_id,name,price,quantity,expiry_date,company,type
+﻿sku_id,name/名字,selling price/卖价格,quantity/数量,expiry_date/有效期,company/公司,type/类型
 TCM-0001,八味带下方2,,,,,
 TCM-0002,八正散1,,,,,
 TCM-0003,白虎汤1,,,,,
