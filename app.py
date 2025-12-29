@@ -232,6 +232,8 @@ translations = {
         'other_charges': 'Other Charges',
         'description': 'Description',
         'eg_adminfee': 'e.g. Admin fee',
+        'physician_name': "Physician's Name",
+        'physician_password': "Physician's Password",
     },
     'zh': {
         'add_patient': '添加病人',
@@ -380,6 +382,8 @@ translations = {
         'other_charges': '另外收费',
         'description': '内容',
         'eg_adminfee': '例如',
+        'physician_name': '医生姓名',
+        'physician_password': '医生密码',
     }
 
 }
