@@ -234,6 +234,7 @@ translations = {
         'eg_adminfee': 'e.g. Admin fee',
         'physician_name': "Physician's Name",
         'physician_password': "Physician's Password",
+        'subtotal_services': 'Subtotal (Services):',
     },
     'zh': {
         'add_patient': '添加病人',
@@ -384,6 +385,7 @@ translations = {
         'eg_adminfee': '例如',
         'physician_name': '医生姓名',
         'physician_password': '医生密码',
+        'subtotal_services': '治疗项目小计：',
     }
 
 }
