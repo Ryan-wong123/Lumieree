@@ -51,7 +51,7 @@
                 <th>{{ t('medicine_name') }}</th>
                 <th>{{ t('quantity') }}</th>
                 <th>{{ t('dosage') }}</th>
-                <th>{{ t('actions') }}</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="prescription-list"></tbody>
@@ -73,7 +73,7 @@
               <tr>
                 <th>{{ t('service') }}</th>
                 <th style="width: 160px;">{{ t('price') }}</th>
-                <th>{{ t('actions') }}</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="services-list">
@@ -105,21 +105,21 @@
       </div>
       <!-- Other custom charges (free text) -->
       <div class="col-md-12 mt-3">
-        <label class="form-label">Other charges</label>
+        <label class="form-label">{{ t('other_charges') }}</label>
         <div class="table-responsive">
           <table class="table table-bordered" id="other-services-table">
             <thead class="table-light">
               <tr>
-                <th>Description</th>
+                <th>{{ t('description') }}</th>
                 <th style="width: 160px;">{{ t('price') }}</th>
-                <th>{{ t('actions') }}</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="other-services-list">
               <tr class="other-service-row">
                 <td>
                   <!-- NOTE: same name="service_name" so backend sees it as a service -->
-                  <input name="service_name" type="text" class="form-control" placeholder="e.g. Admin fee" required>
+                  <input name="service_name" type="text" class="form-control" placeholder="{{ t('eg_adminfee') }}" required>
                 </td>
                 <td>
                   <!-- NOTE: same name="service_amount" -->

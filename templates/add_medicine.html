@@ -4,15 +4,25 @@
 <h4>{{ t('add_medicine') }}</h4>
 
 <form method="POST">
-  <input name="name" class="form-control mb-2" placeholder="{{ t('medicine_name') }}" required>
-  <input name="price" type="number" step="0.01" class="form-control mb-2" placeholder="{{ t('price') }}" required>
-  <input name="stock" type="number" class="form-control mb-2" placeholder="{{ t('quantity') }}" required>
-  <input type="date" name="expiry_date" class="form-control mb-3" required>
-  <input name="company" class="form-control mb-2" placeholder="{{ t('company') }}" required>
-  <!-- NEW: medicine type dropdown -->
-  <label class="form-label mt-1">{{ t('type') }}</label>
+
+  <label class="form-label">{{ t('medicine_name') }}</label>
+  <input name="name" class="form-control mb-2" required>
+
+  <label class="form-label">{{ t('price') }}</label>
+  <input name="price" type="number" step="0.01" class="form-control mb-2" required>
+
+  <label class="form-label">{{ t('quantity') }}</label>
+  <input name="stock" type="number" class="form-control mb-2" required>
+
+  <label class="form-label">{{ t('expiry_date') }}</label>
+  <input type="date" name="expiry_date" class="form-control mb-2" required>
+
+  <label class="form-label">{{ t('company') }}</label>
+  <input name="company" class="form-control mb-2" required>
+
+  <label class="form-label">{{ t('type') }}</label>
   <select name="type" class="form-control mb-3" required>
-    <option value="" disabled selected>-- Select type --</option>
+    <option value="" disabled selected>-- {{ t('select_type') }} --</option>
     <option value="{{ t('pills') }}">{{ t('pills') }}</option>
     <option value="{{ t('grams') }}">{{ t('grams') }}</option>
     <option value="{{ t('bottle') }}">{{ t('bottle') }}</option>
