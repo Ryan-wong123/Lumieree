@@ -237,6 +237,8 @@ translations = {
         'physician_name': "Physician's Name",
         'physician_password': "Physician's Password",
         'subtotal_services': 'Subtotal (Services):',
+        'custom_receipt_placeholder': 'e.g. Consultation and medication',
+        'grand_total_sgd': 'Grand total (S$)',
     },
     'zh': {
         'add_patient': '添加病人',
@@ -396,8 +398,16 @@ translations = {
 @app.context_processor
 def inject_translation():
     lang = g.get('lang', 'en')
+    zh_overrides = {
+        'custom_receipt_placeholder': '例如：门诊与药费',
+        'grand_total_sgd': '总计（S$）',
+    }
     return {
-        't': lambda key: translations[lang].get(key, key)
+        't': lambda key: (
+            zh_overrides.get(key, key)
+            if lang == 'zh' and key in zh_overrides
+            else translations[lang].get(key, key)
+        )
     }
 
 @app.before_request
@@ -1070,6 +1080,7 @@ def generate_receipt_pdf():
     medicine_count = int(request.form.get('medicine_count', 0) or 0)
     prescribed_medicines = []  # (name, qty_label, price, subtotal)
     medicine_total = 0.0
+    use_meds_master = request.form.get('use_meds_master', '1') == '1'
 
     for i in range(1, medicine_count + 1):
         name = request.form.get(f'medicine_name_{i}') or ''
@@ -1078,7 +1089,7 @@ def generate_receipt_pdf():
         qty_num = _parse_numeric_label(qty_label, default=1)
 
         # If the checkbox for this medicine was not ticked, skip it
-        if not request.form.get(f'use_med_{i}'):
+        if not use_meds_master or not request.form.get(f'use_med_{i}'):
             continue
 
         subtotal = price * (qty_num if isinstance(qty_num, (int, float)) else 1)

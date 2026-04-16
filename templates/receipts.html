@@ -5,6 +5,7 @@
 
 <form id="servicesForm" method="POST" action="/generate_receipt_pdf">
   <input type="hidden" name="patient_name" value="{{ patient.name }}">
+  <input type="hidden" name="use_meds_master" id="useMedsMasterField" value="{{ '1' if items else '0' }}">
 
   <!-- Prescribed Medicines Section -->
   <h5>{{ t('prescribed_meds') }}</h5>
@@ -31,7 +32,7 @@
       {# ONE row shown to the user #}
       <tr>
         <td class="text-center">
-          <input type="checkbox" id="useMedsMaster" checked>
+          <input type="checkbox" id="useMedsMaster" {% if items %}checked{% endif %}>
         </td>
         <td colspan="3">{{ t('medicine') }}</td>
         <td>${{ '%.2f' % total_medicine.value }}</td>
@@ -114,8 +115,8 @@
   <div id="customRow" class="mt-3" style="display:none;">
     <div class="d-flex flex-wrap align-items-center gap-2">
       <input type="text" id="custom_description" name="custom_description" class="form-control"
-        placeholder="e.g. Consultation and medication" style="flex: 1 1 250px;">
-      <span>Grand total (S$)</span>
+        placeholder="{{ t('custom_receipt_placeholder') }}" style="flex: 1 1 250px;">
+      <span>{{ t('grand_total_sgd') }}</span>
       <input type="number" step="0.01" min="0" id="custom_grand_total" name="custom_grand_total" class="form-control"
         style="max-width: 150px;">
     </div>
@@ -132,11 +133,26 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
+    const medsMaster = document.getElementById('useMedsMaster');
+    const medsMasterField = document.getElementById('useMedsMasterField');
+    const medItemCheckboxes = document.querySelectorAll('.med-item-cb');
+
     function parseAmount(text) {
       if (!text) return 0;
       text = text.replace(/[^0-9.\-]/g, '');
       const value = parseFloat(text);
       return isNaN(value) ? 0 : value;
+    }
+
+    function syncMedicineSelectionState() {
+      if (!medsMaster) return;
+      const checked = medsMaster.checked;
+      medItemCheckboxes.forEach(cb => {
+        cb.checked = checked;
+      });
+      if (medsMasterField) {
+        medsMasterField.value = checked ? '1' : '0';
+      }
     }
 
     function recalcTotals() {
@@ -176,13 +192,13 @@
       if (grand) grand.textContent = '$' + (medTotal + svcTotal).toFixed(2);
 
       // Show custom row ONLY when no checkboxes are ticked
-      const allCheckboxes = document.querySelectorAll(
-        'input[type="checkbox"][name^="use_med_"], input[type="checkbox"][name^="use_"]'
-      );
       let anyChecked = false;
-      allCheckboxes.forEach(cb => {
+      document.querySelectorAll('input[type="checkbox"][name^="use_"]').forEach(cb => {
         if (cb.checked) anyChecked = true;
       });
+      if (medsMaster && medsMaster.checked) {
+        anyChecked = true;
+      }
 
       const customRow = document.getElementById('customRow');
       if (customRow) {
@@ -190,14 +206,18 @@
       }
     }
 
-    // Listen to all medicine + service checkboxes
-    document.querySelectorAll(
-      'input[type="checkbox"][name^="use_med_"], input[type="checkbox"][name^="use_"]'
-    ).forEach(cb => {
+    if (medsMaster) {
+      medsMaster.addEventListener('change', () => {
+        syncMedicineSelectionState();
+        recalcTotals();
+      });
+    }
+
+    document.querySelectorAll('input[type="checkbox"][name^="use_"]').forEach(cb => {
       cb.addEventListener('change', recalcTotals);
     });
 
-    // Initial calculation & initial visibility
+    syncMedicineSelectionState();
     recalcTotals();
   });
 </script>
