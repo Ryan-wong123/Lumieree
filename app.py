@@ -14,6 +14,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.lib import colors
 from collections import defaultdict
+from itertools import zip_longest
 import requests
 import re
 import csv
@@ -439,9 +440,33 @@ def normalize_expiry_to_iso(s: str) -> str:
 @app.route('/api/medicines')
 def get_medicine_names():
     require_login()
-    meds = with_owner(db.collection('medicines')).stream()
-    names = [m.to_dict().get('name', '') for m in meds if m.to_dict().get('name')]
-    return {'results': names}
+    medicines = []
+    for med in with_owner(db.collection('medicines')).stream():
+        data = med.to_dict()
+        name = (data.get('name') or '').strip()
+        if not name:
+            continue
+
+        try:
+            stock = float(data.get('stock', 0) or 0)
+        except (TypeError, ValueError):
+            stock = 0.0
+
+        try:
+            price = float(data.get('price', 0) or 0)
+        except (TypeError, ValueError):
+            price = 0.0
+
+        medicines.append({
+            'id': med.id,
+            'name': name,
+            'stock': stock,
+            'price': price,
+            'available': stock > 0,
+        })
+
+    medicines.sort(key=lambda item: (not item['available'], item['name'].lower()))
+    return {'results': medicines}
 
 @app.route('/inventory')
 def inventory():
@@ -694,18 +719,25 @@ def patient_visits(id):
         action = request.form.get('action')
 
         # Prescribed meds (existing behaviour)
+        medicine_ids = request.form.getlist('med_id')
         names = request.form.getlist('med_name')
         quantities = request.form.getlist('med_quantity')
         dosages = request.form.getlist('med_dosage')
         prescribed_meds = []
-        for n, q, d in zip(names, quantities, dosages):
-            if not n:
+        for med_id, n, q, d in zip_longest(medicine_ids, names, quantities, dosages, fillvalue=''):
+            medicine_name = (n or '').strip()
+            if not medicine_name:
                 continue
             try:
                 qv = int(q)
             except Exception:
                 qv = 1
-            prescribed_meds.append({'name': n, 'quantity': qv, 'dosage': d})
+            prescribed_meds.append({
+                'medicine_id': (med_id or '').strip(),
+                'name': medicine_name,
+                'quantity': qv,
+                'dosage': d,
+            })
 
         # ✅ Services (parsed on backend)
         service_names   = request.form.getlist('service_name')     # multiple same-name fields
@@ -1221,11 +1253,18 @@ def update_queue_status(queue_id, status):
     if status == 'completed':
         # Decrement stock when marking as completed (only within this owner’s medicines)
         for med in items:
-            query = with_owner(db.collection('medicines')).where('name', '==', med['name']).limit(1).stream()
-            found = next(query, None)
+            found = None
+            med_id = (med.get('medicine_id') or '').strip()
+            if med_id:
+                med_snap = db.collection('medicines').document(med_id).get()
+                if med_snap.exists and med_snap.to_dict().get('owner_id') == current_uid():
+                    found = med_snap
+            if not found:
+                query = with_owner(db.collection('medicines')).where('name', '==', med['name']).limit(1).stream()
+                found = next(query, None)
             if found:
-                ref = db.collection('medicines').document(found.id)
                 med_doc = found.to_dict()
+                ref = db.collection('medicines').document(found.id)
                 new_stock = max(med_doc.get('stock', 0) - int(med['quantity']), 0)
                 ref.update({'stock': new_stock})
 
@@ -1236,11 +1275,18 @@ def update_queue_status(queue_id, status):
         # Revert stock if voiding a completed order
         if current_status == 'completed':
             for med in items:
-                query = with_owner(db.collection('medicines')).where('name', '==', med['name']).limit(1).stream()
-                found = next(query, None)
+                found = None
+                med_id = (med.get('medicine_id') or '').strip()
+                if med_id:
+                    med_snap = db.collection('medicines').document(med_id).get()
+                    if med_snap.exists and med_snap.to_dict().get('owner_id') == current_uid():
+                        found = med_snap
+                if not found:
+                    query = with_owner(db.collection('medicines')).where('name', '==', med['name']).limit(1).stream()
+                    found = next(query, None)
                 if found:
-                    ref = db.collection('medicines').document(found.id)
                     med_doc = found.to_dict()
+                    ref = db.collection('medicines').document(found.id)
                     new_stock = med_doc.get('stock', 0) + int(med['quantity'])
                     ref.update({'stock': new_stock})
 

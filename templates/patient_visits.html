@@ -41,7 +41,6 @@
                   placeholder="{{ t('condition_placeholder') }}" required>{{ draft.condition if draft else '' }}</textarea>
       </div>
 
-      <!-- Prescribed Medications (Table Style) -->
       <div class="col-md-12">
         <label class="form-label">{{ t('prescribed_meds') }}</label>
         <div class="">
@@ -59,12 +58,11 @@
         </div>
         <button type="button" class="btn btn-outline-secondary mt-2" id="add-med-row">+</button>
       </div>
-      <!-- Medicine subtotal -->
+
       <div class="col-md-12 text-end mt-2">
         <strong>{{ t('subtotal_meds') }}: $<span id="meds-total">0.00</span></strong>
       </div>
 
-      <!-- Services Rendered (saved on the visit) -->
       <div class="col-md-12 mt-3">
         <label class="form-label">{{ t('services_rendered') }}</label>
         <div class="table-responsive">
@@ -77,7 +75,6 @@
               </tr>
             </thead>
             <tbody id="services-list">
-              <!-- Template row to clone -->
               <tr class="service-row">
                 <td>
                   <select name="service_name" class="form-select" required>
@@ -91,7 +88,7 @@
                   <input name="service_amount" type="number" step="0.01" min="0" class="form-control" value="0" required>
                 </td>
                 <td class="text-center">
-                  <button type="button" class="btn btn-outline-danger btn-sm remove-service">×</button>
+                  <button type="button" class="btn btn-outline-danger btn-sm remove-service">x</button>
                 </td>
               </tr>
             </tbody>
@@ -99,11 +96,11 @@
         </div>
         <button type="button" class="btn btn-outline-secondary mt-2" id="add-service-row">+</button>
       </div>
-      <!-- Services subtotal -->
+
       <div class="col-md-12 text-end mt-2">
         <strong>{{ t('subtotal_services') }}: $<span id="services-total">0.00</span></strong>
       </div>
-      <!-- Other custom charges (free text) -->
+
       <div class="col-md-12 mt-3">
         <label class="form-label">{{ t('other_charges') }}</label>
         <div class="table-responsive">
@@ -118,15 +115,13 @@
             <tbody id="other-services-list">
               <tr class="other-service-row">
                 <td>
-                  <!-- NOTE: same name="service_name" so backend sees it as a service -->
                   <input name="service_name" type="text" class="form-control" placeholder="{{ t('eg_adminfee') }}" required>
                 </td>
                 <td>
-                  <!-- NOTE: same name="service_amount" -->
                   <input name="service_amount" type="number" step="0.01" min="0" class="form-control" value="0" required>
                 </td>
                 <td class="text-center">
-                  <button type="button" class="btn btn-outline-danger btn-sm remove-other-service">×</button>
+                  <button type="button" class="btn btn-outline-danger btn-sm remove-other-service">x</button>
                 </td>
               </tr>
             </tbody>
@@ -134,11 +129,11 @@
         </div>
         <button type="button" class="btn btn-outline-secondary mt-2" id="add-other-service-row">+</button>
       </div>
-  <!-- NEW: Subtotal for Other Charges -->
+
       <div class="col-md-12 text-end mt-2">
         <strong>Subtotal (Other Charges): $<span id="other-services-total">0.00</span></strong>
       </div>
-      <!-- Grand total -->
+
       <div class="col-md-12 text-end mt-3">
         <h5>{{ t('grand_total') }}: $<span id="grand-total">0.00</span></h5>
       </div>
@@ -163,7 +158,6 @@
   </div>
 </div>
 
-<!-- Past Visit Filters (client-side) -->
 <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
   <div>
     <label class="form-label mb-1">{{ t('start_date') if t('start_date') else 'Start date' }}</label>
@@ -178,7 +172,6 @@
   </div>
 </div>
 
-<!-- Past Visit Records -->
 <h5>{{ t('past_visits') }}</h5>
 <table class="table table-striped" id="visits-table">
   <thead class="table-light">
@@ -194,14 +187,13 @@
   <tbody id="visits-tbody">
     {% set _has_visits = (visits|length) > 0 %}
     {% for v in visits %}
-      {# Ensure each row carries an ISO date for filtering #}
       {% set iso_date = v.date.strftime('%Y-%m-%d') if v.date.__class__.__name__ in ['date','datetime'] else v.date %}
       <tr data-date="{{ iso_date }}">
         <td>{{ v.date }}</td>
         <td>{{ v.condition }}</td>
         <td>
           {% for med in v.prescribed_meds %}
-            <div>{{ med.name }} — {{ med.quantity }} {{ med.dosage }}</div>
+            <div>{{ med.name }} - {{ med.quantity }} {{ med.dosage }}</div>
           {% endfor %}
         </td>
         <td>{{ v.notes }}</td>
@@ -209,10 +201,10 @@
         <td>
           {% if v.services %}
             {% for s in v.services %}
-              <div>{{ s.name }} — ${{ '%.2f' % (s.amount or 0) }}</div>
+              <div>{{ s.name }} - ${{ '%.2f' % (s.amount or 0) }}</div>
             {% endfor %}
           {% else %}
-            <span class="text-muted">—</span>
+            <span class="text-muted">-</span>
           {% endif %}
         </td>
       </tr>
@@ -223,229 +215,342 @@
   </tbody>
 </table>
 
-<!-- (Optional) You can remove the old datalist block -->
-
 <script>
-  // ===================== Shared refs =====================
-  const medTbody = document.getElementById("prescription-list");
-  const addMedBtn = document.getElementById("add-med-row");
+  const medTbody = document.getElementById('prescription-list');
+  const addMedBtn = document.getElementById('add-med-row');
   const servicesTbody = document.getElementById('services-list');
   const addServiceBtn = document.getElementById('add-service-row');
-   // 🔹 Price map and total elements
+  const visitForm = medTbody ? medTbody.closest('form') : null;
   const MED_PRICE_MAP = {{ medicine_price_map|default({})|tojson|safe }};
   const medsTotalEl = document.getElementById('meds-total');
   const servicesTotalEl = document.getElementById('services-total');
   const otherServicesTbody = document.getElementById('other-services-list');
-const addOtherServiceBtn = document.getElementById('add-other-service-row');
-const otherServicesTotalEl = document.getElementById('other-services-total');  // NEW
+  const addOtherServiceBtn = document.getElementById('add-other-service-row');
+  const otherServicesTotalEl = document.getElementById('other-services-total');
   const grandTotalEl = document.getElementById('grand-total');
-if (otherServicesTbody) {
-  // Recalculate when user types in description or amount
-  otherServicesTbody.addEventListener('input', (e) => {
-    if (
-      e.target.name === 'service_amount' ||
-      e.target.name === 'service_name'
-    ) {
-      recalcTotals();
-    }
-  });
-}
+  let MED_INVENTORY = [];
 
-function recalcTotals() {
-  // --- Medicines ---
-  let medTotal = 0;
+  {% if draft and draft.prescribed_meds %}
+    const draftMeds = {{ draft.prescribed_meds | tojson }};
+  {% else %}
+    const draftMeds = [];
+  {% endif %}
 
-  if (medTbody) {
-    medTbody.querySelectorAll('tr').forEach(tr => {
-      const nameInput = tr.querySelector('input[name="med_name"]');
-      const qtyInput  = tr.querySelector('input[name="med_quantity"]');
-      if (!nameInput || !qtyInput) return;
+  {% if draft and draft.services %}
+    const draftServices = {{ draft.services | tojson }};
+  {% else %}
+    const draftServices = [];
+  {% endif %}
 
-      const name = nameInput.value.trim();
-      const qty  = parseFloat(qtyInput.value) || 0;
-      if (!name || !qty) return;
+  const visitStartEl = document.getElementById('visit-start');
+  const visitEndEl = document.getElementById('visit-end');
+  const visitsTbody = document.getElementById('visits-tbody');
+  const visitsEmpty = document.getElementById('visits-empty');
+  const clearBtn = document.getElementById('visit-clear');
 
-      const unitPrice = MED_PRICE_MAP[name] || 0;
-      medTotal += unitPrice * qty;
-    });
+  function normalizeMedicineName(value) {
+    return String(value || '').trim().toLowerCase();
   }
 
-  // --- Services subtotal (dropdown services table only) ---
-  let servicesSubtotal = 0;
-  if (servicesTbody) {
-    servicesTbody.querySelectorAll('tr.service-row').forEach(tr => {
-      const amtInput = tr.querySelector('input[name="service_amount"]');
-      if (!amtInput) return;
-      const amt = parseFloat(amtInput.value) || 0;
-      servicesSubtotal += amt;
-    });
+  function findMedicineById(id) {
+    const wanted = String(id || '').trim();
+    if (!wanted) return null;
+    return MED_INVENTORY.find(item => String(item.id || '') === wanted) || null;
   }
 
-  // --- Other charges subtotal (free-text table only) ---
-  let otherSubtotal = 0;
-  if (otherServicesTbody) {
-    otherServicesTbody.querySelectorAll('tr.other-service-row').forEach(tr => {
-      const amtInput = tr.querySelector('input[name="service_amount"]');
-      if (!amtInput) return;
-      const amt = parseFloat(amtInput.value) || 0;
-      otherSubtotal += amt;
-    });
+  function findExactMedicine(name) {
+    const wanted = normalizeMedicineName(name);
+    if (!wanted) return null;
+    return MED_INVENTORY.find(item => normalizeMedicineName(item.name) === wanted) || null;
   }
 
-  // --- Update DOM ---
-  if (medsTotalEl)         medsTotalEl.textContent         = medTotal.toFixed(2);
-  if (servicesTotalEl)     servicesTotalEl.textContent     = servicesSubtotal.toFixed(2);
-  if (otherServicesTotalEl) otherServicesTotalEl.textContent = otherSubtotal.toFixed(2);
-  if (grandTotalEl)        grandTotalEl.textContent        = (medTotal + servicesSubtotal + otherSubtotal).toFixed(2);
-}
-
-if (otherServicesTbody) {
-  otherServicesTbody.addEventListener('click', (e) => {
-    if (e.target.classList.contains('remove-other-service')) {
-      const rows = otherServicesTbody.querySelectorAll('tr.other-service-row');
-      if (rows.length > 1) e.target.closest('tr').remove();
-      recalcTotals();
-    }
-  });
-}
-
-function addOtherServiceRow(prefill = null) {
-  const first = otherServicesTbody.querySelector('tr.other-service-row');
-  const clone = first.cloneNode(true);
-
-  const nameInput = clone.querySelector('input[name="service_name"]');
-  const amtInput  = clone.querySelector('input[name="service_amount"]');
-
-  // Clear values for new row
-  if (nameInput) nameInput.value = '';
-  if (amtInput) amtInput.value = 0;
-
-  // Recalc when fields change
-  if (nameInput) nameInput.addEventListener('input', recalcTotals);
-  if (amtInput) amtInput.addEventListener('input', recalcTotals);
-
-  if (prefill) {
-    if (nameInput) nameInput.value = prefill.name || '';
-    if (amtInput)  amtInput.value  = (prefill.amount ?? 0);
+  function getAvailableMedicines() {
+    return MED_INVENTORY.filter(item => item && item.name && item.available);
   }
 
-  otherServicesTbody.appendChild(clone);
-  recalcTotals();
-}
-if (addOtherServiceBtn) {
-  addOtherServiceBtn.addEventListener('click', () => addOtherServiceRow());
-}
+  function formatMedicineStock(stock) {
+    const numericStock = Number(stock) || 0;
+    return Number.isInteger(numericStock) ? String(numericStock) : numericStock.toFixed(2);
+  }
 
-  // ===================== Medicines data (fetch once) =====================
-  let MED_NAMES = [];
-  async function ensureMedNames() {
-    if (MED_NAMES.length) return MED_NAMES;
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  async function ensureMedicineInventory() {
+    if (MED_INVENTORY.length) return MED_INVENTORY;
+
     try {
-      // Expect { "results": ["Panadol", "Loratadine", ...] }
-      const r = await fetch('/api/medicines');
-      const j = await r.json();
-      MED_NAMES = (j.results || []).filter(Boolean);
-    } catch (e) {
-      console.warn('Failed to fetch /api/medicines', e);
+      const response = await fetch('/api/medicines');
+      const payload = await response.json();
+      MED_INVENTORY = (payload.results || [])
+        .filter(item => item && item.name)
+        .map(item => ({
+          id: item.id || '',
+          name: item.name,
+          stock: Number(item.stock) || 0,
+          price: Number(item.price) || 0,
+          available: Boolean(item.available),
+        }));
+
+      MED_INVENTORY.forEach(item => {
+        MED_PRICE_MAP[item.name] = item.price;
+      });
+    } catch (error) {
+      console.warn('Failed to fetch /api/medicines', error);
     }
-    return MED_NAMES;
+
+    return MED_INVENTORY;
   }
 
-  // Simple ranking: startsWith > includes > alphabetical
-  function rankMatches(query, items, limit = 20) {
-    const q = (query || '').trim().toLowerCase();
+  function rankMedicineMatches(query, items, limit = 20) {
+    const q = normalizeMedicineName(query);
     if (!q) return items.slice(0, limit);
+
     return items
-      .map(name => {
-        const l = String(name).toLowerCase();
+      .map(item => {
+        const loweredName = normalizeMedicineName(item.name);
         let score = Infinity;
-        if (l.startsWith(q)) score = 0;
-        else if (l.includes(q)) score = 1;
-        return { name, score };
+        if (loweredName.startsWith(q)) score = 0;
+        else if (loweredName.includes(q)) score = 1;
+        return { item, score };
       })
-      .filter(x => x.score !== Infinity)
-      .sort((a,b) => a.score - b.score || a.name.localeCompare(b.name))
+      .filter(entry => entry.score !== Infinity)
+      .sort((a, b) => a.score - b.score || a.item.name.localeCompare(b.item.name))
       .slice(0, limit)
-      .map(x => x.name);
+      .map(entry => entry.item);
   }
 
-  // ===================== Autocomplete (overlay & scrolls itself) =====================
-  function attachMedAutocomplete(inputEl) {
-    const menu = inputEl.parentElement.querySelector('.dropdown-menu');
+  function syncMedicineSelection(rowEl, medicine, options = {}) {
+    const { preserveTypedValue = false } = options;
+    const nameInput = rowEl.querySelector('input[name="med_name"]');
+    const medIdInput = rowEl.querySelector('input[name="med_id"]');
+    if (!nameInput || !medIdInput) return;
+
+    if (!medicine) {
+      medIdInput.value = '';
+      nameInput.dataset.selectedId = '';
+      nameInput.dataset.selectedName = '';
+      if (!preserveTypedValue) nameInput.value = '';
+      nameInput.setCustomValidity('');
+      return;
+    }
+
+    medIdInput.value = medicine.id || '';
+    nameInput.value = medicine.name || '';
+    nameInput.dataset.selectedId = medicine.id || '';
+    nameInput.dataset.selectedName = medicine.name || '';
+    nameInput.setCustomValidity('');
+  }
+
+  function recalcTotals() {
+    let medTotal = 0;
+
+    if (medTbody) {
+      medTbody.querySelectorAll('tr').forEach(tr => {
+        const nameInput = tr.querySelector('input[name="med_name"]');
+        const medIdInput = tr.querySelector('input[name="med_id"]');
+        const qtyInput = tr.querySelector('input[name="med_quantity"]');
+        if (!nameInput || !qtyInput) return;
+
+        const name = nameInput.value.trim();
+        const qty = parseFloat(qtyInput.value) || 0;
+        if (!name || !qty) return;
+
+        const selectedMedicine = medIdInput && medIdInput.value ? findMedicineById(medIdInput.value) : findExactMedicine(name);
+        const unitPrice = selectedMedicine ? (Number(selectedMedicine.price) || 0) : (MED_PRICE_MAP[name] || 0);
+        medTotal += unitPrice * qty;
+      });
+    }
+
+    let servicesSubtotal = 0;
+    if (servicesTbody) {
+      servicesTbody.querySelectorAll('tr.service-row').forEach(tr => {
+        const amtInput = tr.querySelector('input[name="service_amount"]');
+        if (!amtInput) return;
+        servicesSubtotal += parseFloat(amtInput.value) || 0;
+      });
+    }
+
+    let otherSubtotal = 0;
+    if (otherServicesTbody) {
+      otherServicesTbody.querySelectorAll('tr.other-service-row').forEach(tr => {
+        const amtInput = tr.querySelector('input[name="service_amount"]');
+        if (!amtInput) return;
+        otherSubtotal += parseFloat(amtInput.value) || 0;
+      });
+    }
+
+    if (medsTotalEl) medsTotalEl.textContent = medTotal.toFixed(2);
+    if (servicesTotalEl) servicesTotalEl.textContent = servicesSubtotal.toFixed(2);
+    if (otherServicesTotalEl) otherServicesTotalEl.textContent = otherSubtotal.toFixed(2);
+    if (grandTotalEl) grandTotalEl.textContent = (medTotal + servicesSubtotal + otherSubtotal).toFixed(2);
+  }
+
+  function addOtherServiceRow(prefill = null) {
+    const first = otherServicesTbody.querySelector('tr.other-service-row');
+    const clone = first.cloneNode(true);
+    const nameInput = clone.querySelector('input[name="service_name"]');
+    const amtInput = clone.querySelector('input[name="service_amount"]');
+
+    if (nameInput) nameInput.value = '';
+    if (amtInput) amtInput.value = 0;
+
+    if (nameInput) nameInput.addEventListener('input', recalcTotals);
+    if (amtInput) amtInput.addEventListener('input', recalcTotals);
+
+    if (prefill) {
+      if (nameInput) nameInput.value = prefill.name || '';
+      if (amtInput) amtInput.value = (prefill.amount ?? 0);
+    }
+
+    otherServicesTbody.appendChild(clone);
+    recalcTotals();
+  }
+
+  function attachMedAutocomplete(rowEl) {
+    const nameInput = rowEl.querySelector('input[name="med_name"]');
+    const medIdInput = rowEl.querySelector('input[name="med_id"]');
+    const menu = rowEl.querySelector('.dropdown-menu');
+    if (!nameInput || !medIdInput || !menu) return;
 
     let suggestions = [];
-    let idx = -1;
+    let activeIndex = -1;
 
     function openMenu() {
-      if (menu.hasAttribute('hidden')) menu.removeAttribute('hidden');
-      menu.classList.add('show');                 // Bootstrap open style
-      inputEl.setAttribute('aria-expanded', 'true');
+      menu.removeAttribute('hidden');
+      menu.classList.add('show');
+      nameInput.setAttribute('aria-expanded', 'true');
     }
+
     function closeMenu() {
       menu.classList.remove('show');
       menu.setAttribute('hidden', '');
-      inputEl.setAttribute('aria-expanded', 'false');
-      idx = -1;
-      suggestions = [];
       menu.innerHTML = '';
+      suggestions = [];
+      activeIndex = -1;
+      nameInput.setAttribute('aria-expanded', 'false');
     }
-    function render(list) {
-      suggestions = list;
-      idx = -1;
-      if (!list.length) { closeMenu(); return; }
-      menu.innerHTML = list.map((txt, i) =>
-        `<li><button type="button" class="dropdown-item${i===idx?' active':''}" data-i="${i}">${txt}</button></li>`
-      ).join('');
-      openMenu();
-    }
+
     function highlight() {
-      [...menu.querySelectorAll('.dropdown-item')].forEach((btn, i) => {
-        btn.classList.toggle('active', i === idx);
-        if (i === idx) btn.scrollIntoView({ block: 'nearest' });
+      [...menu.querySelectorAll('.dropdown-item')].forEach((btn, index) => {
+        btn.classList.toggle('active', index === activeIndex);
+        if (index === activeIndex) btn.scrollIntoView({ block: 'nearest' });
       });
     }
-        function choose(i) {
-      inputEl.value = suggestions[i];
-      closeMenu();
-      inputEl.focus();
-      // 🔹 Recalculate when a medicine is chosen
-      if (typeof recalcTotals === 'function') recalcTotals();
+
+    function render(items) {
+      suggestions = items;
+      activeIndex = -1;
+      if (!items.length) {
+        closeMenu();
+        return;
+      }
+
+      menu.innerHTML = items.map((item, index) => `
+        <li>
+          <button type="button" class="dropdown-item" data-index="${index}">
+            <div class="d-flex justify-content-between align-items-center gap-3">
+              <span>${escapeHtml(item.name)}</span>
+              <small class="text-muted">${escapeHtml(formatMedicineStock(item.stock))} in stock</small>
+            </div>
+          </button>
+        </li>
+      `).join('');
+      openMenu();
     }
 
+    function choose(index) {
+      const chosen = suggestions[index];
+      if (!chosen) return;
+      syncMedicineSelection(rowEl, chosen);
+      closeMenu();
+      nameInput.focus();
+      recalcTotals();
+    }
 
-    inputEl.addEventListener('input', async () => {
-      await ensureMedNames();
-      render(rankMatches(inputEl.value, MED_NAMES, 20)); // show many; list scrolls itself
+    async function showMatches() {
+      await ensureMedicineInventory();
+      render(rankMedicineMatches(nameInput.value, getAvailableMedicines(), 20));
+    }
+
+    nameInput.addEventListener('focus', showMatches);
+    nameInput.addEventListener('click', showMatches);
+
+    nameInput.addEventListener('input', async () => {
+      if (normalizeMedicineName(nameInput.dataset.selectedName) !== normalizeMedicineName(nameInput.value)) {
+        medIdInput.value = '';
+        nameInput.dataset.selectedId = '';
+        nameInput.dataset.selectedName = '';
+      }
+      nameInput.setCustomValidity('');
+      await showMatches();
     });
 
-    inputEl.addEventListener('keydown', (e) => {
+    nameInput.addEventListener('keydown', (event) => {
       if (menu.hasAttribute('hidden')) return;
-      const max = suggestions.length - 1;
-      if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, max); highlight(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); highlight(); }
-      else if (e.key === 'Enter')  { if (idx >= 0) { e.preventDefault(); choose(idx); } }
-      else if (e.key === 'Escape') { closeMenu(); }
+      const maxIndex = suggestions.length - 1;
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        activeIndex = Math.min(activeIndex + 1, maxIndex);
+        highlight();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        activeIndex = Math.max(activeIndex - 1, 0);
+        highlight();
+      } else if (event.key === 'Enter') {
+        if (activeIndex >= 0) {
+          event.preventDefault();
+          choose(activeIndex);
+        }
+      } else if (event.key === 'Escape') {
+        closeMenu();
+      }
     });
 
-    menu.addEventListener('mousedown', (e) => {
-      const btn = e.target.closest('.dropdown-item');
+    nameInput.addEventListener('blur', () => {
+      window.setTimeout(() => {
+        const typedValue = nameInput.value.trim();
+        if (!typedValue) {
+          syncMedicineSelection(rowEl, null);
+          closeMenu();
+          return;
+        }
+
+        const exactMatch = findExactMedicine(typedValue);
+        if (exactMatch && exactMatch.available) {
+          syncMedicineSelection(rowEl, exactMatch);
+        } else if (!medIdInput.value) {
+          nameInput.setCustomValidity('Please select a medicine from your inventory.');
+        }
+        closeMenu();
+      }, 150);
+    });
+
+    menu.addEventListener('mousedown', (event) => {
+      const btn = event.target.closest('.dropdown-item');
       if (!btn) return;
-      choose(+btn.dataset.i);
+      choose(Number(btn.dataset.index));
     });
 
-    // click outside closes the menu
-    document.addEventListener('click', (e) => {
-      if (!menu.contains(e.target) && e.target !== inputEl) closeMenu();
+    document.addEventListener('click', (event) => {
+      if (!menu.contains(event.target) && event.target !== nameInput) {
+        closeMenu();
+      }
     });
   }
 
-  // ===================== Build rows =====================
   function addMedicineRow(prefill = null) {
-    const tr = document.createElement("tr");
+    const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
-        <!-- Overlay suggestions: absolute, z-index high; only list scrolls -->
         <div class="position-relative w-100">
+          <input type="hidden" name="med_id">
           <input name="med_name" class="form-control"
                  placeholder="{{ t('medicine_name') }}" autocomplete="off" required>
           <ul class="dropdown-menu position-absolute top-100 start-0 w-100 shadow p-0"
@@ -462,51 +567,58 @@ if (addOtherServiceBtn) {
         </select>
       </td>
       <td class="text-center">
-        <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">×</button>
+        <button type="button" class="btn btn-outline-danger btn-sm remove-med-row">x</button>
       </td>
     `;
     medTbody.appendChild(tr);
 
     const nameInput = tr.querySelector('input[name="med_name"]');
-    const qtyInput  = tr.querySelector('input[name="med_quantity"]');
-    attachMedAutocomplete(nameInput);
+    const medIdInput = tr.querySelector('input[name="med_id"]');
+    const qtyInput = tr.querySelector('input[name="med_quantity"]');
+    const removeBtn = tr.querySelector('.remove-med-row');
 
-    // 🔹 Recalc when name or quantity changes
+    attachMedAutocomplete(tr);
     nameInput.addEventListener('change', recalcTotals);
     qtyInput.addEventListener('input', recalcTotals);
 
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        tr.remove();
+        recalcTotals();
+      });
+    }
+
     if (prefill) {
-      nameInput.value = prefill.name || '';
-      qtyInput.value  = (prefill.quantity ?? 1);
+      const matchedMedicine = (prefill.medicine_id && findMedicineById(prefill.medicine_id)) || findExactMedicine(prefill.name);
+      if (matchedMedicine) {
+        syncMedicineSelection(tr, matchedMedicine);
+      } else {
+        medIdInput.value = prefill.medicine_id || '';
+        nameInput.value = prefill.name || '';
+      }
+      qtyInput.value = (prefill.quantity ?? 1);
       if (prefill.dosage) tr.querySelector('[name="med_dosage"]').value = prefill.dosage;
     }
 
-    // 🔹 After creating row, update totals
     recalcTotals();
   }
 
-  addMedBtn.addEventListener('click', () => addMedicineRow());
-
-
-  // -------- Services builder --------
-    function addServiceRow(prefill = null) {
+  function addServiceRow(prefill = null) {
     const first = servicesTbody.querySelector('tr.service-row');
     const clone = first.cloneNode(true);
-
-    // Clear values for new row
     const sel = clone.querySelector('select[name="service_name"]');
     const amt = clone.querySelector('input[name="service_amount"]');
+
     if (sel) sel.value = '';
     if (amt) amt.value = 0;
 
-    // 🔹 Recalc when service name or price changes
     if (sel) sel.addEventListener('change', recalcTotals);
     if (amt) amt.addEventListener('input', recalcTotals);
 
     servicesTbody.appendChild(clone);
 
     if (prefill) {
-      if (![...sel.options].some(o => o.value === prefill.name)) {
+      if (![...sel.options].some(option => option.value === prefill.name)) {
         const opt = document.createElement('option');
         opt.value = prefill.name;
         opt.textContent = prefill.name;
@@ -516,40 +628,8 @@ if (addOtherServiceBtn) {
       amt.value = (prefill.amount ?? 0);
     }
 
-    // 🔹 After creating row, update totals
     recalcTotals();
   }
-
-  addServiceBtn.addEventListener('click', () => addServiceRow());
-
-
-    servicesTbody.addEventListener('click', (e) => {
-    if (e.target.classList.contains('remove-service')) {
-      const rows = servicesTbody.querySelectorAll('tr.service-row');
-      if (rows.length > 1) e.target.closest('tr').remove();
-      recalcTotals();  // 🔹 update after removal
-    }
-  });
-
-
-  // ===================== Draft data from server =====================
-  {% if draft and draft.prescribed_meds %}
-    const draftMeds = {{ draft.prescribed_meds | tojson }};
-  {% else %}
-    const draftMeds = [];
-  {% endif %}
-
-  {% if draft and draft.services %}
-    const draftServices = {{ draft.services | tojson }};
-  {% else %}
-    const draftServices = [];
-  {% endif %}
-
-  // ===================== Past Visits: client-side date filter =====================
-  const visitStartEl = document.getElementById('visit-start');
-  const visitEndEl   = document.getElementById('visit-end');
-  const visitsTbody  = document.getElementById('visits-tbody');
-  const visitsEmpty  = document.getElementById('visits-empty');
 
   function inRange(iso, startIso, endIso) {
     if (!iso) return false;
@@ -561,15 +641,14 @@ if (addOtherServiceBtn) {
   function filterVisits() {
     if (!visitsTbody) return;
     const startIso = visitStartEl ? visitStartEl.value : '';
-    const endIso   = visitEndEl ? visitEndEl.value : '';
+    const endIso = visitEndEl ? visitEndEl.value : '';
 
     let shown = 0;
-    const rows = [...visitsTbody.querySelectorAll('tr[data-date]')];
-    rows.forEach(tr => {
+    [...visitsTbody.querySelectorAll('tr[data-date]')].forEach(tr => {
       const iso = tr.getAttribute('data-date') || '';
-      const ok = (!startIso && !endIso) ? true : inRange(iso, startIso, endIso);
-      tr.classList.toggle('d-none', !ok);
-      if (ok) shown++;
+      const visible = (!startIso && !endIso) ? true : inRange(iso, startIso, endIso);
+      tr.classList.toggle('d-none', !visible);
+      if (visible) shown++;
     });
 
     if (visitsEmpty) {
@@ -577,9 +656,47 @@ if (addOtherServiceBtn) {
     }
   }
 
+  if (otherServicesTbody) {
+    otherServicesTbody.addEventListener('input', (event) => {
+      if (event.target.name === 'service_amount' || event.target.name === 'service_name') {
+        recalcTotals();
+      }
+    });
+
+    otherServicesTbody.addEventListener('click', (event) => {
+      if (event.target.classList.contains('remove-other-service')) {
+        const rows = otherServicesTbody.querySelectorAll('tr.other-service-row');
+        if (rows.length > 1) event.target.closest('tr').remove();
+        recalcTotals();
+      }
+    });
+  }
+
+  if (addOtherServiceBtn) {
+    addOtherServiceBtn.addEventListener('click', () => addOtherServiceRow());
+  }
+
+  if (addMedBtn) {
+    addMedBtn.addEventListener('click', () => addMedicineRow());
+  }
+
+  if (addServiceBtn) {
+    addServiceBtn.addEventListener('click', () => addServiceRow());
+  }
+
+  if (servicesTbody) {
+    servicesTbody.addEventListener('click', (event) => {
+      if (event.target.classList.contains('remove-service')) {
+        const rows = servicesTbody.querySelectorAll('tr.service-row');
+        if (rows.length > 1) event.target.closest('tr').remove();
+        recalcTotals();
+      }
+    });
+  }
+
   if (visitStartEl) visitStartEl.addEventListener('change', filterVisits);
   if (visitEndEl) visitEndEl.addEventListener('change', filterVisits);
-  const clearBtn = document.getElementById('visit-clear');
+
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
       if (visitStartEl) visitStartEl.value = '';
@@ -588,10 +705,43 @@ if (addOtherServiceBtn) {
     });
   }
 
-  // ===================== Prefill on load =====================
+  if (visitForm) {
+    visitForm.addEventListener('submit', async (event) => {
+      await ensureMedicineInventory();
+      let invalidInput = null;
+
+      medTbody.querySelectorAll('tr').forEach(tr => {
+        const nameInput = tr.querySelector('input[name="med_name"]');
+        const medIdInput = tr.querySelector('input[name="med_id"]');
+        if (!nameInput || !medIdInput) return;
+
+        const typedValue = nameInput.value.trim();
+        if (!typedValue) {
+          medIdInput.value = '';
+          nameInput.setCustomValidity('');
+          return;
+        }
+
+        const selectedMedicine = (medIdInput.value && findMedicineById(medIdInput.value)) || findExactMedicine(typedValue);
+        if (!selectedMedicine || !selectedMedicine.available) {
+          nameInput.setCustomValidity('Please select a medicine from your inventory.');
+          invalidInput = invalidInput || nameInput;
+          return;
+        }
+
+        syncMedicineSelection(tr, selectedMedicine);
+      });
+
+      if (invalidInput) {
+        event.preventDefault();
+        invalidInput.reportValidity();
+      }
+    });
+  }
+
   window.addEventListener('DOMContentLoaded', async () => {
-    await ensureMedNames();
-     // 🔹 Attach listeners to the initial service row as well
+    await ensureMedicineInventory();
+
     if (servicesTbody) {
       const firstRow = servicesTbody.querySelector('tr.service-row');
       if (firstRow) {
@@ -600,7 +750,7 @@ if (addOtherServiceBtn) {
         if (sel0) sel0.addEventListener('change', recalcTotals);
         if (amt0) amt0.addEventListener('input', recalcTotals);
       }
-  }
+    }
 
     if (draftMeds.length) draftMeds.forEach(addMedicineRow);
     else addMedicineRow();
@@ -609,22 +759,23 @@ if (addOtherServiceBtn) {
       const first = servicesTbody.querySelector('tr.service-row');
       const sel = first.querySelector('select[name="service_name"]');
       const amt = first.querySelector('input[name="service_amount"]');
-      const s0 = draftServices[0];
-      if (s0) {
-        if (![...sel.options].some(o => o.value === s0.name)) {
+      const firstDraftService = draftServices[0];
+
+      if (firstDraftService) {
+        if (![...sel.options].some(option => option.value === firstDraftService.name)) {
           const opt = document.createElement('option');
-          opt.value = s0.name;
-          opt.textContent = s0.name;
+          opt.value = firstDraftService.name;
+          opt.textContent = firstDraftService.name;
           sel.appendChild(opt);
         }
-        sel.value = s0.name || '';
-        amt.value = (s0.amount ?? 0);
+        sel.value = firstDraftService.name || '';
+        amt.value = (firstDraftService.amount ?? 0);
       }
+
       draftServices.slice(1).forEach(addServiceRow);
     }
- // 🔹 Compute initial totals after prefilling
+
     recalcTotals();
-    // Run once on load (in case dates are pre-filled later)
     filterVisits();
   });
 </script>
