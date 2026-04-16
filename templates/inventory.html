@@ -36,7 +36,11 @@
 {% endfor %}
 
 {% for name, batch_list in grouped.items() %}
+{% set english_name = batch_list[0].english_name|default('') %}
 <h5 class="mt-4">{{ name }}</h5>
+{% if english_name %}
+<div class="text-muted mb-2">{{ english_name }}</div>
+{% endif %}
 <table class="table table-bordered">
   <thead>
     <tr>

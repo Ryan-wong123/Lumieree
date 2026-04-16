@@ -128,6 +128,7 @@ translations = {
         'type': 'Type',
         'price': 'Selling Price',
         'stock': 'Stock',
+        'english_name': 'English Name',
         'dosage_info': 'Dosage Info',
         'batch_number': 'Batch Number',
         'expiry_date': 'Expiry Date',
@@ -279,6 +280,7 @@ translations = {
         'type': '类型',
         'price': '卖价格',
         'stock': '库存',
+        'english_name': '英文名',
         'dosage_info': '剂量信息',
         'batch_number': '批号',
         'expiry_date': '有效期',
@@ -455,6 +457,7 @@ def inventory():
         data['id'] = doc.id  # needed for adjusting/editing
         text_haystack = " ".join([
             data.get('name', ''),
+            data.get('english_name', ''),
             str(data.get('barcode', ''))  # still searchable if you kept barcodes historically
         ]).lower()
         if query:
@@ -470,6 +473,8 @@ def add_medicine():
     require_login()
     if request.method == 'POST':
         data = request.form.to_dict()
+        data['name'] = (data.get('name') or '').strip()
+        data['english_name'] = (data.get('english_name') or '').strip()
         data['price'] = float(data['price'])
         data['stock'] = int(data['stock'])
         data['expiry_date'] = data['expiry_date']
@@ -561,6 +566,8 @@ def edit_medicine(id):
 
     if request.method == 'POST':
         data = request.form.to_dict()
+        data['name'] = (data.get('name') or '').strip()
+        data['english_name'] = (data.get('english_name') or '').strip()
         data['price'] = float(data['price'])
         data['stock'] = int(data['stock'])
 
@@ -1855,10 +1862,14 @@ def _to_float(val, default=0.0):
     except Exception:
         return default
 
-def _get_ci(row: dict, key: str):
-    key = key.lower()
+def _canon_csv_header(value):
+    return re.sub(r"[\s/_-]+", "", _norm(value).lower())
+
+def _get_ci(row: dict, *keys: str):
+    wanted = {_canon_csv_header(key) for key in keys if key}
     for k in row.keys():
-        if k and k.strip().lower() == key:
+        canon_key = _canon_csv_header(k)
+        if canon_key in wanted or any(canon_key.startswith(key) for key in wanted):
             return row.get(k)
     return None
 
@@ -1915,13 +1926,16 @@ def import_inventory_csv():
     BATCH_LIMIT = 450
 
     for r in rows:
-        sku_id = _norm(_get_ci(r, "sku_id"))
-        name = _norm(_get_ci(r, "name"))
+        sku_id = _norm(_get_ci(r, "sku_id", "sku id", "sku"))
+        name = _norm(_get_ci(r, "name", "medicine_name", "medicine name"))
+        english_name = _norm(_get_ci(r, "english_name", "english name", "medicine_english_name", "medicine english name"))
         company = _norm(_get_ci(r, "company"))
         med_type = _norm(_get_ci(r, "type"))
-        expiry_date = normalize_expiry_to_iso(_norm(_get_ci(r, "expiry_date")))
-        price = _to_float(_get_ci(r, "price"), 0.0)
-        quantity = _to_int(_get_ci(r, "quantity"), 0)
+        expiry_date = normalize_expiry_to_iso(
+            _norm(_get_ci(r, "expiry_date", "expiry date"))
+        )
+        price = _to_float(_get_ci(r, "price", "selling price"), 0.0)
+        quantity = _to_int(_get_ci(r, "quantity", "stock"), 0)
 
         if not name:
             skipped += 1
@@ -1957,6 +1971,13 @@ def import_inventory_csv():
             "expiry_date": expiry_date,
             "owner_id": owner
         }
+
+        if english_name:
+            data["english_name"] = english_name
+        elif match:
+            existing_english_name = _norm(match.to_dict().get("english_name"))
+            if existing_english_name:
+                data["english_name"] = existing_english_name
 
         if match:
             pending.append(("update", match.id, data))

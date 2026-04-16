@@ -24,6 +24,13 @@ input[type="date"]::-webkit-datetime-edit {
     required
   >
 
+  <label class="form-label">{{ t('english_name') }}</label>
+  <input
+    name="english_name"
+    value="{{ medicine.english_name|default('') }}"
+    class="form-control mb-3"
+  >
+
   <!-- Price -->
   <label class="form-label">{{ t('price') }}</label>
   <input

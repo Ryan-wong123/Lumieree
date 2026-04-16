@@ -1,204 +1,204 @@
-﻿sku_id,name/名字,selling price/卖价格,quantity/数量,expiry_date/有效期,company/公司,type/类型
-TCM-0001,八味带下方2,,,,,
-TCM-0002,八正散1,,,,,
-TCM-0003,白虎汤1,,,,,
-TCM-0004,白鲜皮,,,,,
-TCM-0005,白术,,,,,
-TCM-0006,贝母,,,,,
-TCM-0007,半夏,,,,,
-TCM-0008,白芷,,,,,
-TCM-0009,薄荷,,,,,
-TCM-0010,白果,,,,,
-TCM-0011,白花蛇草,,,,,
-TCM-0012,艾叶,,,,,
-TCM-0013,白僵蚕,,,,,
-TCM-0014,板蓝根,,,,,
-TCM-0015,败酱草,,,,,
-TCM-0016,白芍,,,,,
-TCM-0017,白豆蔻,,,,,
-TCM-0018,补中益气汤,,,,,
-TCM-0019,补阳还五汤,,,,,
-TCM-0020,苍耳散,,,,,
-TCM-0021,川芎,,,,,
-TCM-0022,苍耳子,,,,,
-TCM-0023,赤芍,,,,,
-TCM-0024,苍术,,,,,
-TCM-0025,陈皮,,,,,
-TCM-0026,车前草,,,,,
-TCM-0027,凉膈散,,,,,
-TCM-0028,当归四逆汤,,,,,
-TCM-0029,大青叶,,,,,
-TCM-0030,定喘汤,,,,,
-TCM-0031,当归拈痛汤,,,,,
-TCM-0032,地狱炭,,,,,
-TCM-0033,当归六黄汤,,,,,
-TCM-0034,丁香,,,,,
-TCM-0035,地肤子,,,,,
-TCM-0036,丹皮,,,,,
-TCM-0037,地骨皮,,,,,
-TCM-0038,大黄,,,,,
-TCM-0039,胆南星,,,,,
-TCM-0040,独活寄生汤,,,,,
-TCM-0041,独活,,,,,
-TCM-0042,丹参,,,,,
-TCM-0043,党参,,,,,
-TCM-0044,当归,,,,,
-TCM-0045,浮小麦去,,,,,
-TCM-0046,三棱,,,,,
-TCM-0047,莪术,,,,,
-TCM-0048,覆盆子,,,,,
-TCM-0049,防风,,,,,
-TCM-0050,番泻叶,,,,,
-TCM-0051,佛手,,,,,
-TCM-0052,防风通圣散,,,,,
-TCM-0053,理中汤,,,,,
-TCM-0054,茯苓,,,,,
-TCM-0055,茯神,,,,,
-TCM-0056,过期饮,,,,,
-TCM-0057,桂枝甘草龙骨牡蛎汤,,,,,
-TCM-0058,钩藤,,,,,
-TCM-0059,甘露消毒丹,,,,,
-TCM-0060,桂枝茯苓丸,,,,,
-TCM-0061,葛根,,,,,
-TCM-0062,葛根汤,,,,,
-TCM-0063,甘麦大枣汤,,,,,
-TCM-0064,高良姜,,,,,
-TCM-0065,骨碎补,,,,,
-TCM-0066,桂枝汤,,,,,
-TCM-0067,归脾汤,,,,,
-TCM-0068,桂枝,,,,,
-TCM-0069,栝楼仁,,,,,
-TCM-0070,炙甘草,,,,,
-TCM-0071,海金沙,,,,,
-TCM-0072,海螵蛸,,,,,
-TCM-0073,藿香正气散,,,,,
-TCM-0074,黄芪,,,,,
-TCM-0075,合欢皮,,,,,
-TCM-0076,厚朴,,,,,
-TCM-0077,黄柏,,,,,
-TCM-0078,黄芩,,,,,
-TCM-0079,黄连解毒汤,,,,,
-TCM-0080,苦参,,,,,
-TCM-0081,还少丹,,,,,
-TCM-0082,八味地黄汤,,,,,
-TCM-0083,加味逍遥散,,,,,
-TCM-0084,桂附地黄汤,,,,,
-TCM-0085,蠲痹汤,,,,,
-TCM-0086,九味羌活汤,,,,,
-TCM-0087,荆芥,,,,,
-TCM-0088,姜黄,,,,,
-TCM-0089,桔梗,,,,,
-TCM-0090,菊花,,,,,
-TCM-0091,鸡血藤,,,,,
-TCM-0092,鸡内金,,,,,
-TCM-0093,六味地黄汤,,,,,
-TCM-0094,苓桂术甘汤,,,,,
-TCM-0095,麻黄,,,,,
-TCM-0096,麻黄附子细辛汤,,,,,
-TCM-0097,麻杏石甘汤,,,,,
-TCM-0098,麻黄根,,,,,
-TCM-0099,木瓜,,,,,
-TCM-0100,蔓荆子,,,,,
-TCM-0101,木香,,,,,
-TCM-0102,麦芽,,,,,
-TCM-0103,怀牛膝,,,,,
-TCM-0104,牡蛎,,,,,
-TCM-0105,龙骨,,,,,
-TCM-0106,芒硝,,,,,
-TCM-0107,平胃散,,,,,
-TCM-0108,蒲黄炭,,,,,
-TCM-0109,枇杷叶,,,,,
-TCM-0110,秦艽,,,,,
-TCM-0111,茜草,,,,,
-TCM-0112,羌活胜湿汤,,,,,
-TCM-0113,羌活,,,,,
-TCM-0114,肉苁蓉,,,,,
-TCM-0115,肉桂,,,,,
-TCM-0116,没药,,,,,
-TCM-0117,乳香,,,,,
-TCM-0118,参苓白术散,,,,,
-TCM-0119,生脉散,,,,,
-TCM-0120,上中下通用痛风丸,,,,,
-TCM-0121,沙参麦冬汤,,,,,
-TCM-0122,四逆汤,,,,,
-TCM-0123,神秘汤,,,,,
-TCM-0124,四物汤,,,,,
-TCM-0125,四逆散,,,,,
-TCM-0126,苏子降气汤,,,,,
-TCM-0127,桑菊饮,,,,,
-TCM-0128,舒筋活血汤,,,,,
-TCM-0129,四君子汤,,,,,
-TCM-0130,桑寄生,,,,,
-TCM-0131,伸筋草,,,,,
-TCM-0132,射干,,,,,
-TCM-0133,神曲,,,,,
-TCM-0134,石膏,,,,,
-TCM-0135,山豆根,,,,,
-TCM-0136,三黄泻心汤,,,,,
-TCM-0137,桑椹子,,,,,
-TCM-0138,山药,,,,,
-TCM-0139,少腹逐瘀汤,,,,,
-TCM-0140,山楂,,,,,
-TCM-0141,生地黄,,,,,
-TCM-0142,升麻,,,,,
-TCM-0143,天花粉,,,,,
-TCM-0144,菟丝子,,,,,
-TCM-0145,桃仁,,,,,
-TCM-0146,天王补心丹,,,,,
-TCM-0147,太子参,,,,,
-TCM-0148,天麻,,,,,
-TCM-0149,温胆汤,,,,,
-TCM-0150,五苓散,,,,,
-TCM-0151,乌药顺气散,,,,,
-TCM-0152,土茯苓,,,,,
-TCM-0153,乌梅,,,,,
-TCM-0154,温经汤,,,,,
-TCM-0155,威灵仙,,,,,
-TCM-0156,乌药,,,,,
-TCM-0157,瓦楞子,,,,,
-TCM-0158,五淋散,,,,,
-TCM-0159,小建中汤,,,,,
-TCM-0160,五倍子,,,,,
-TCM-0161,旋覆代赭汤,,,,,
-TCM-0162,小柴胡汤,,,,,
-TCM-0163,血竭,,,,,
-TCM-0164,响声破笛丸,,,,,
-TCM-0165,玄参,,,,,
-TCM-0166,仙方活命饮,,,,,
-TCM-0167,血府逐瘀汤,,,,,
-TCM-0168,辛夷花,,,,,
-TCM-0169,消风散,,,,,
-TCM-0170,薤白,,,,,
-TCM-0171,小茴香,,,,,
-TCM-0172,香附,,,,,
-TCM-0173,细辛,,,,,
-TCM-0174,辛夷清肺饮,,,,,
-TCM-0175,夏枯草,,,,,
-TCM-0176,杏仁,,,,,
-TCM-0177,旋复花,,,,,
-TCM-0178,小青龙汤,,,,,
-TCM-0179,小活络丹,,,,,
-TCM-0180,竹茹,,,,,
-TCM-0181,玉竹,,,,,
-TCM-0182,远志,,,,,
-TCM-0183,右归丸,,,,,
-TCM-0184,益智仁,,,,,
-TCM-0185,益母草,,,,,
-TCM-0186,银翘散,,,,,
-TCM-0187,养阴清肺汤,,,,,
-TCM-0188,夜交藤,,,,,
-TCM-0189,郁金,,,,,
-TCM-0190,薏仁,,,,,
-TCM-0191,紫草根牡蛎汤,,,,,
-TCM-0192,正骨紫金丹,,,,,
-TCM-0193,栀子,,,,,
-TCM-0194,真武汤,,,,,
-TCM-0195,止嗽散,,,,,
-TCM-0196,知母,,,,,
-TCM-0197,泽泻,,,,,
-TCM-0198,皂角刺,,,,,
-TCM-0199,泽兰,,,,,
-TCM-0200,紫草,,,,,
-TCM-0201,紫花地丁,,,,,
-TCM-0202,左归丸,,,,,
-TCM-0203,枳实,,,,,
+﻿sku_id,name/名字,selling price/卖价格,quantity/数量,expiry_date/有效期,company/公司,type/类型,english_name
+TCM-0001,八味带下方2,,,,,,Eight-Ingredient Decoction with Lower Recipe 2
+TCM-0002,八正散1,,,,,,Eight-Ingredient Powder 1
+TCM-0003,白虎汤1,,,,,,White Tiger Decoction 1
+TCM-0004,白鲜皮,,,,,,Dictamnus dasycarpus root bark
+TCM-0005,白术,,,,,,Atractylodes macrocephala root
+TCM-0006,贝母,,,,,,Fritillaria cirrhosa bulb
+TCM-0007,半夏,,,,,,Pinellia ternata root
+TCM-0008,白芷,,,,,,Angelica dahurica root
+TCM-0009,薄荷,,,,,,Mentha haplocalyx fruit
+TCM-0010,白果,,,,,,Ginkgo biloba fruit
+TCM-0011,白花蛇草,,,,,,Hedyotis diffusa herb
+TCM-0012,艾叶,,,,,,Artemisia argyi leaf
+TCM-0013,白僵蚕,,,,,,Bombyx mori (silkworm)
+TCM-0014,板蓝根,,,,,,Isatis root
+TCM-0015,败酱草,,,,,,Patrinia scabiosaefolia herb
+TCM-0016,白芍,,,,,,Paeonia lactiflora root
+TCM-0017,白豆蔻,,,,,,Amomum villosum cardamomum
+TCM-0018,补中益气汤,,,,,,Tonifying the Middle and Boosting Qi Decoction
+TCM-0019,补阳还五汤,,,,,,Tonifying Yang and Rejuvenating the Five Elements Decoction
+TCM-0020,苍耳散,,,,,,Xanthium sibiricum powder
+TCM-0021,川芎,,,,,,Ligusticum chuanxiong
+TCM-0022,苍耳子,,,,,,Xanthium sibiricum fruit
+TCM-0023,赤芍,,,,,,Red peony root
+TCM-0024,苍术,,,,,,Atractylodes lancea
+TCM-0025,陈皮,,,,,,Citrus reticulata peel
+TCM-0026,车前草,,,,,,Plantago asiatica
+TCM-0027,凉膈散,,,,,,Liangge powder
+TCM-0028,当归四逆汤,,,,,,Danggui Sini decoction
+TCM-0029,大青叶,,,,,,Indigofera tinctoria leaf
+TCM-0030,定喘汤,,,,,,Dingchuan Decoction
+TCM-0031,当归拈痛汤,,,,,,Danggui Niantong Decoction
+TCM-0032,地狱炭,,,,,,Hell Charcoal
+TCM-0033,当归六黄汤,,,,,,Danggui Liuhuang Decoction
+TCM-0034,丁香,,,,,,Clove
+TCM-0035,地肤子,,,,,,Kochia scoparia
+TCM-0036,丹皮,,,,,,Paeonia suffruticosa
+TCM-0037,地骨皮,,,,,,Lycium chinense root bark
+TCM-0038,大黄,,,,,,Rhubarb
+TCM-0039,胆南星,,,,,,Arisaema cum bile
+TCM-0040,独活寄生汤,,,,,,Angelica pubescens Decoction
+TCM-0041,独活,,,,,,Angelica pubescens
+TCM-0042,丹参,,,,,,Salvia miltiorrhiza
+TCM-0043,党参,,,,,,Codonopsis pilosula
+TCM-0044,当归,,,,,,Angelica sinensis
+TCM-0045,浮小麦去,,,,,,Triticum aestivum
+TCM-0046,三棱,,,,,,Sparganium stoloniferum
+TCM-0047,莪术,,,,,,Curcuma zedoaria
+TCM-0048,覆盆子,,,,,,Rubus idaeus
+TCM-0049,防风,,,,,,Saposhnikovia divaricata
+TCM-0050,番泻叶,,,,,,Senna leaf
+TCM-0051,佛手,,,,,,Buddha's hand
+TCM-0052,防风通圣散,,,,,,Fangfeng Tongsheng Powder
+TCM-0053,理中汤,,,,,,Lizhong Decoction
+TCM-0054,茯苓,,,,,,Poria cocos
+TCM-0055,茯神,,,,,,Poria cocos sclerotium
+TCM-0056,过期饮,,,,,,Expired drink
+TCM-0057,桂枝甘草龙骨牡蛎汤,,,,,,Cinnamon twig
+TCM-0058,钩藤,,,,,,"Cinnamon Twig, Licorice Root, Dragon Bone, and Oyster Shell Decoction"
+TCM-0059,甘露消毒丹,,,,,,Ganlu Disinfecting Pill
+TCM-0060,桂枝茯苓丸,,,,,,Guizhi Fuling Wan (Cinnamon Twig and Poria Pill)
+TCM-0061,葛根,,,,,,Kudzu Root
+TCM-0062,葛根汤,,,,,,Kudzu Root Decoction
+TCM-0063,甘麦大枣汤,,,,,,"Licorice, Wheat, and Jujube Decoction"
+TCM-0064,高良姜,,,,,,Alpinia Officinarum
+TCM-0065,骨碎补,,,,,,Drynaria Rhizome
+TCM-0066,桂枝汤,,,,,,Cinnamon Twig Decoction
+TCM-0067,归脾汤,,,,,,Spleen-Nourishing Decoction
+TCM-0068,桂枝,,,,,,Cinnamon Twig
+TCM-0069,栝楼仁,,,,,,Trichosanthes Kernel
+TCM-0070,炙甘草,,,,,,Prepared licorice root
+TCM-0071,海金沙,,,,,,Lygodium japonicum
+TCM-0072,海螵蛸,,,,,,Cuttlebone
+TCM-0073,藿香正气散,,,,,,Agastache rugosa powder
+TCM-0074,黄芪,,,,,,Astragalus membranaceus bark
+TCM-0075,合欢皮,,,,,,Magnolia officinalis bark
+TCM-0076,厚朴,,,,,,Phellodendron chinense bark
+TCM-0077,黄柏,,,,,,Scutellaria baicalensis root
+TCM-0078,黄芩,,,,,,Coptis chinensis decoction
+TCM-0079,黄连解毒汤,,,,,,Huanglian Jiedu Decoction
+TCM-0080,苦参,,,,,,Kushen
+TCM-0081,还少丹,,,,,,Huan Shao Dan
+TCM-0082,八味地黄汤,,,,,,Eight-Ingredient Rehmannia Decoction
+TCM-0083,加味逍遥散,,,,,,Modified Xiaoyao Powder
+TCM-0084,桂附地黄汤,,,,,,Cinnamon and Aconite Rehmannia Decoction
+TCM-0085,蠲痹汤,,,,,,Anbi Decoction
+TCM-0086,九味羌活汤,,,,,,Nine-Ingredient Qianghuo Decoction
+TCM-0087,荆芥,,,,,,Schizonepeta
+TCM-0088,姜黄,,,,,,Curcuma longa
+TCM-0089,桔梗,,,,,,Platycodon grandiflorus
+TCM-0090,菊花,,,,,,Chrysanthemum
+TCM-0091,鸡血藤,,,,,,Chicken Blood Vine
+TCM-0092,鸡内金,,,,,,Chicken Gizzard Lining
+TCM-0093,六味地黄汤,,,,,,Liuwei Dihuang Decoction
+TCM-0094,苓桂术甘汤,,,,,,Linggui Zhugan Decoction
+TCM-0095,麻黄,,,,,,Ephedra
+TCM-0096,麻黄附子细辛汤,,,,,,Ephedra Aconite and Asarum Decoction
+TCM-0097,麻杏石甘汤,,,,,,"Ephedra Apricot Kernel, Gypsum, and Licorice Decoction"
+TCM-0098,麻黄根,,,,,,Ephedra Root
+TCM-0099,木瓜,,,,,,Papaya
+TCM-0100,蔓荆子,,,,,,Vitex trifolia fruit
+TCM-0101,木香,,,,,,Costus root
+TCM-0102,麦芽,,,,,,Malt
+TCM-0103,怀牛膝,,,,,,Achyranthes bidentata
+TCM-0104,牡蛎,,,,,,Oyster shell
+TCM-0105,龙骨,,,,,,Dragon bone
+TCM-0106,芒硝,,,,,,Glauber's salt
+TCM-0107,平胃散,,,,,,Stomach-soothing powder
+TCM-0108,蒲黄炭,,,,,,Typha pollen charcoal
+TCM-0109,枇杷叶,,,,,,Loquat leaf
+TCM-0110,秦艽,,,,,,Gentiana macrophylla
+TCM-0111,茜草,,,,,,Rubia cordifolia
+TCM-0112,羌活胜湿汤,,,,,,Notopterygium incisum decoction
+TCM-0113,羌活,,,,,,Notopterygium incisum
+TCM-0114,肉苁蓉,,,,,,Cistanche deserticola
+TCM-0115,肉桂,,,,,,Cinnamomum cassia
+TCM-0116,没药,,,,,,Commiphora myrrha
+TCM-0117,乳香,,,,,,Boswellia carterii
+TCM-0118,参苓白术散,,,,,,Ginseng and Atractylodes macrocephala powder
+TCM-0119,生脉散,,,,,,Shengmai powder
+TCM-0120,上中下通用痛风丸,,,,,,"Gout Pills for Upper, Middle, and Lower Body Use"
+TCM-0121,沙参麦冬汤,,,,,,Adenophora and Ophiopogon Decoction
+TCM-0122,四逆汤,,,,,,Four-Reversal Decoction
+TCM-0123,神秘汤,,,,,,Mysterious Decoction
+TCM-0124,四物汤,,,,,,Four-Substance Decoction
+TCM-0125,四逆散,,,,,,Four-Reversal Powder
+TCM-0126,苏子降气汤,,,,,,Perilla Seed Qi-Regulating Decoction
+TCM-0127,桑菊饮,,,,,,Mulberry and Chrysanthemum Drink
+TCM-0128,舒筋活血汤,,,,,,Muscle-Relaxing and Blood-Activating Decoction
+TCM-0129,四君子汤,,,,,,Four Gentlemen Decoction
+TCM-0130,桑寄生,,,,,,Loranthus parasiticus
+TCM-0131,伸筋草,,,,,,Lycopodium clavatum
+TCM-0132,射干,,,,,,Belamcanda chinensis
+TCM-0133,神曲,,,,,,Medicated leaven
+TCM-0134,石膏,,,,,,Gypsum
+TCM-0135,山豆根,,,,,,Sophora tonkinensis
+TCM-0136,三黄泻心汤,,,,,,Sanhuang Xiexin Decoction
+TCM-0137,桑椹子,,,,,,Mulberry fruit
+TCM-0138,山药,,,,,,Dioscorea opposita
+TCM-0139,少腹逐瘀汤,,,,,,Shaofu Zhuyu Decoction
+TCM-0140,山楂,,,,,,Hawthorn
+TCM-0141,生地黄,,,,,,Rehmannia glutinosa
+TCM-0142,升麻,,,,,,Cimicifuga foetida
+TCM-0143,天花粉,,,,,,Trichosanthes kirilowii
+TCM-0144,菟丝子,,,,,,Cuscuta chinensis
+TCM-0145,桃仁,,,,,,Prunus persica
+TCM-0146,天王补心丹,,,,,,Tianwang Buxin Dan
+TCM-0147,太子参,,,,,,Codonopsis pilosula
+TCM-0148,天麻,,,,,,Gastrodia elata
+TCM-0149,温胆汤,,,,,,Wendan Tang
+TCM-0150,五苓散,,,,,,Wuling San
+TCM-0151,乌药顺气散,,,,,,Wuyao Shunqi San
+TCM-0152,土茯苓,,,,,,Smilax glabra
+TCM-0153,乌梅,,,,,,Prunus mume
+TCM-0154,温经汤,,,,,,Wenjing Tang
+TCM-0155,威灵仙,,,,,,Clematis chinensis
+TCM-0156,乌药,,,,,,Wuyao
+TCM-0157,瓦楞子,,,,,,Ostrea gigas
+TCM-0158,五淋散,,,,,,Wulin San
+TCM-0159,小建中汤,,,,,,Xiaojianzhong Tang
+TCM-0160,五倍子,,,,,,Gallnut
+TCM-0161,旋覆代赭汤,,,,,,Inula and Hematite Decoction
+TCM-0162,小柴胡汤,,,,,,Minor Bupleurum Decoction
+TCM-0163,血竭,,,,,,Dragon's Blood
+TCM-0164,响声破笛丸,,,,,,Sound-Breaking Flute Pill
+TCM-0165,玄参,,,,,,Scrophularia
+TCM-0166,仙方活命饮,,,,,,Immortal Life-Saving Drink
+TCM-0167,血府逐瘀汤,,,,,,Blood-Stasis-Expelling Decoction
+TCM-0168,辛夷花,,,,,,Magnolia Flower
+TCM-0169,消风散,,,,,,Wind-Dispelling Powder
+TCM-0170,薤白,,,,,,Allium macrostemon
+TCM-0171,小茴香,,,,,,Fennel
+TCM-0172,香附,,,,,,Cyperus rotundus
+TCM-0173,细辛,,,,,,Asarum
+TCM-0174,辛夷清肺饮,,,,,,Magnolia Flower Lung-Clearing Drink
+TCM-0175,夏枯草,,,,,,Prunella vulgaris
+TCM-0176,杏仁,,,,,,Apricot Kernel
+TCM-0177,旋复花,,,,,,Inula Flower
+TCM-0178,小青龙汤,,,,,,Minor Blue Dragon Decoction
+TCM-0179,小活络丹,,,,,,Minor Invigorating Collateral Pill
+TCM-0180,竹茹,,,,,,Bamboo shavings
+TCM-0181,玉竹,,,,,,Polygonatum odoratum
+TCM-0182,远志,,,,,,Polygala tenuifolia
+TCM-0183,右归丸,,,,,,Yougui Wan (Right-Restoring Pill)
+TCM-0184,益智仁,,,,,,Alpinia oxyphylla
+TCM-0185,益母草,,,,,,Leonurus japonicus
+TCM-0186,银翘散,,,,,,Yinqiao San (Honeysuckle and Forsythia Powder)
+TCM-0187,养阴清肺汤,,,,,,Yangyin Qingfei Tang (Nourishing Yin and Clearing Lung Decoction)
+TCM-0188,夜交藤,,,,,,Polygonum multiflorum
+TCM-0189,郁金,,,,,,Curcuma longa
+TCM-0190,薏仁,,,,,,Coix Seed
+TCM-0191,紫草根牡蛎汤,,,,,,Lithospermum Root and Oyster Shell Decoction
+TCM-0192,正骨紫金丹,,,,,,Zheng Gu Zi Jin Dan
+TCM-0193,栀子,,,,,,Gardenia
+TCM-0194,真武汤,,,,,,Zhen Wu Tang
+TCM-0195,止嗽散,,,,,,Zhi Cough Powder
+TCM-0196,知母,,,,,,Anemarrhena
+TCM-0197,泽泻,,,,,,Alisma
+TCM-0198,皂角刺,,,,,,Gleditsia Sinensis Thorn
+TCM-0199,泽兰,,,,,,Lycopus lucidus
+TCM-0200,紫草,,,,,,Lithospermum erythrorhizon
+TCM-0201,紫花地丁,,,,,,Viola yedoensis
+TCM-0202,左归丸,,,,,,Zuo Gui Wan
+TCM-0203,枳实,,,,,,Citrus aurantium
