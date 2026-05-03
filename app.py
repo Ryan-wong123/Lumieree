@@ -44,6 +44,14 @@ def with_owner(query):
     """Attach owner filter to a top-level collection/collection group query."""
     return query.where('owner_id', '==', current_uid())
 
+def normalize_gmail_email(value):
+    value = (value or "").strip()
+    if not value:
+        return ""
+    if "@" in value:
+        return value
+    return f"{value}@gmail.com"
+
 @app.route('/')
 def home():
     return redirect(url_for('patients'))
@@ -1800,7 +1808,7 @@ def admin_user_edit(uid):
         # --- Read form values ---
         new_role = request.form.get("role", user_data.get("role", "staff")).strip()
         active = True if request.form.get("active") == "on" else False
-        new_email = (request.form.get("new_email") or "").strip()
+        new_email = normalize_gmail_email(request.form.get("new_email"))
         new_password = (request.form.get("new_password") or "").strip()
 
         # --- Safety: prevent disabling yourself ---
@@ -1885,7 +1893,7 @@ def settings():
 
     if request.method == 'POST':
         uid = session['user']
-        new_email = request.form.get('new_email')
+        new_email = normalize_gmail_email(request.form.get('new_email'))
         new_password = request.form.get('new_password')
 
         updates = {}
@@ -1896,6 +1904,8 @@ def settings():
 
         try:
             auth.update_user(uid, **updates)
+            if new_email:
+                db.collection("users").document(uid).update({"email": new_email})
             flash("✅ Account updated successfully.")
         except Exception as e:
             flash(f"❌ Error: {str(e)}")
