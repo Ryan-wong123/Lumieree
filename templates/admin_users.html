@@ -13,6 +13,7 @@
       <th>{{ t('role') }}</th>
       <th>{{ t('active') }}</th>
       <th>{{ t('created_by') }}</th>
+      <th>{{ t('actions') }}</th>
     </tr>
   </thead>
   <tbody>
@@ -29,6 +30,16 @@
         <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_user_edit', uid=u.uid) }}">
           ✏️ {{ t('edit') }}
         </a>
+        {% if u.uid != session.user %}
+          <form method="POST"
+                action="{{ url_for('admin_user_delete', uid=u.uid) }}"
+                class="d-inline"
+                onsubmit="return confirm('Delete this user, their Firestore data, and Firebase Authentication account? This cannot be undone.');">
+            <button class="btn btn-sm btn-outline-danger" type="submit">
+              Delete
+            </button>
+          </form>
+        {% endif %}
       </td>
 
     </tr>

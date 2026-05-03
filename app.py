@@ -52,6 +52,53 @@ def normalize_gmail_email(value):
         return value
     return f"{value}@gmail.com"
 
+USER_OWNED_COLLECTIONS = (
+    "appointments",
+    "front_desk_queue",
+    "medicines",
+    "prescriptions",
+)
+
+def delete_query_documents(query, batch_size=450):
+    deleted = 0
+    while True:
+        docs = list(query.limit(batch_size).stream())
+        if not docs:
+            break
+
+        batch = db.batch()
+        for doc in docs:
+            batch.delete(doc.reference)
+        batch.commit()
+        deleted += len(docs)
+
+    return deleted
+
+def delete_user_firestore_data(uid):
+    deleted = {}
+
+    deleted["visits"] = delete_query_documents(
+        db.collection_group("visits").where("owner_id", "==", uid)
+    )
+
+    for collection_name in USER_OWNED_COLLECTIONS:
+        deleted[collection_name] = delete_query_documents(
+            db.collection(collection_name).where("owner_id", "==", uid)
+        )
+
+    deleted["patients"] = delete_query_documents(
+        db.collection("patients").where("owner_id", "==", uid)
+    )
+
+    user_ref = db.collection("users").document(uid)
+    if user_ref.get().exists:
+        user_ref.delete()
+        deleted["users"] = 1
+    else:
+        deleted["users"] = 0
+
+    return deleted
+
 @app.route('/')
 def home():
     return redirect(url_for('patients'))
@@ -1877,6 +1924,50 @@ def admin_user_edit(uid):
 
     # --- GET (or failed POST): render edit page ---
     return render_template("edit_user.html", u={"uid": uid, **user_data})
+
+
+@app.route("/admin/users/<uid>/delete", methods=["POST"])
+def admin_user_delete(uid):
+    require_login()
+    deny = require_super_admin()
+    if deny:
+        return deny
+
+    if uid == session.get("user"):
+        flash("❌ You cannot delete your own account.")
+        return redirect(url_for("admin_users"))
+
+    ref = db.collection("users").document(uid)
+    snap = ref.get()
+    if not snap.exists:
+        flash("❌ User record not found.")
+        return redirect(url_for("admin_users"))
+
+    user_data = snap.to_dict() or {}
+    if user_data.get("role") == "super_admin" and user_data.get("active", True):
+        active_super_admin_count = 0
+        for doc in db.collection("users").where("role", "==", "super_admin").stream():
+            d = doc.to_dict() or {}
+            if d.get("active", True):
+                active_super_admin_count += 1
+
+        if active_super_admin_count <= 1:
+            flash("❌ You cannot delete the last active super admin.")
+            return redirect(url_for("admin_users"))
+
+    try:
+        try:
+            auth.delete_user(uid)
+        except auth.UserNotFoundError:
+            pass
+
+        deleted = delete_user_firestore_data(uid)
+        deleted_count = sum(deleted.values())
+        flash(f"✅ User deleted from Authentication and Firestore. {deleted_count} Firestore records removed.")
+    except Exception as e:
+        flash(f"❌ Delete failed: {str(e)}")
+
+    return redirect(url_for("admin_users"))
 
 
 @app.route('/logout')
