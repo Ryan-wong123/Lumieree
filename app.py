@@ -1664,7 +1664,7 @@ def admin_users_create():
     if deny: return deny
 
     if request.method == "POST":
-        email = request.form["email"].strip()
+        email = normalize_gmail_email(request.form["email"])
         password = request.form["password"]
         role = request.form["role"]
 
@@ -1695,7 +1695,7 @@ def create_user():
         return require_super_admin()
 
     if request.method == "POST":
-        email = request.form["email"]
+        email = normalize_gmail_email(request.form["email"])
         password = request.form["password"]
         role = request.form["role"]
 
@@ -1705,6 +1705,7 @@ def create_user():
         )
 
         db.collection("users").document(new_user.uid).set({
+            "email": email,
             "role": role,
             "created_by": session["user"],
             "created_at": datetime.now().isoformat(),
