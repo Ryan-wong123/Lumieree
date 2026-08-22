@@ -3,7 +3,7 @@
 
 from flask import Flask, render_template, request, redirect, url_for, flash,Response,send_file,jsonify,session,g
 from firebase_admin import credentials, firestore, initialize_app, auth
-from datetime import datetime
+from datetime import datetime, date
 from PIL import Image
 import io
 import pandas as pd
@@ -1504,76 +1504,130 @@ def export_queue_csv():
     )
 
 # =================== Appointment ===================
+APPOINTMENT_START_HOUR = 10
+APPOINTMENT_END_HOUR = 20
+
+def parse_appointment_date(value):
+    """Return a validated ISO appointment date, or None."""
+    try:
+        return datetime.strptime((value or '').strip(), '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return None
+
+def parse_appointment_hour(value):
+    """Return a supported whole-hour appointment start, or None."""
+    try:
+        hour = int(value)
+    except (TypeError, ValueError):
+        return None
+    return hour if APPOINTMENT_START_HOUR <= hour <= APPOINTMENT_END_HOUR else None
+
+def appointment_slot_is_booked(value):
+    return bool(str(value or '').strip())
+
+def occupied_appointment_hours(documents, excluded_document_id=None,
+                               excluded_hour=None):
+    """Central conflict rule for the existing date + hourly-slots model."""
+    occupied = set()
+    for document in documents:
+        if excluded_document_id and document.id == excluded_document_id:
+            data = document.to_dict()
+            for raw_hour, value in data.get('slots', {}).items():
+                hour = parse_appointment_hour(raw_hour)
+                if hour is not None and hour != excluded_hour and appointment_slot_is_booked(value):
+                    occupied.add(hour)
+            continue
+        for raw_hour, value in document.to_dict().get('slots', {}).items():
+            hour = parse_appointment_hour(raw_hour)
+            if hour is not None and appointment_slot_is_booked(value):
+                occupied.add(hour)
+    return occupied
+
+def appointment_documents_for_date(date_str):
+    return list(with_owner(db.collection('appointments'))
+                .where('date', '==', date_str).stream())
+
 @app.route('/appointments')
 def appointments_combined():
     require_login()
-    date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+    requested_date = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+    selected = parse_appointment_date(requested_date)
+    if selected is None:
+        flash('Invalid appointment date.')
+        selected = date.today()
+    date_str = selected.isoformat()
 
     # Load bookings for selected date
     appointment_docs = with_owner(db.collection('appointments'))\
         .where('date', '==', date_str).stream()
     patients = []
-    appointment_data = {}
     for doc in appointment_docs:
         data = doc.to_dict()
         name = data['patient_name']
         contact = data.get('contact', '')
-        patients.append({'name': name, 'contact': contact})
-        appointment_data[name] = data.get('slots', {})
-
-    # Count bookings per day for calendar coloring
-    all_docs = with_owner(db.collection('appointments')).stream()
-    booking_counts = defaultdict(int)
-    for doc in all_docs:
-        data = doc.to_dict()
-        if 'date' in data:
-            booking_counts[data['date']] += 1
-
-    event_list = []
-    for date, count in booking_counts.items():
-        color = "#198754" if count <= 2 else "#ffc107" if count <= 5 else "#dc3545"
-        event_list.append({
-            'title': f"{count} bookings",
-            'start': date,
-            'allDay': True,
-            'backgroundColor': color,
-            'borderColor': color
-        })
+        patients.append({'id': doc.id, 'name': name, 'contact': contact,
+                         'slots': data.get('slots', {})})
 
     return render_template('appointments.html',
                            patients=patients,
-                           appointments=appointment_data,
-                           selected_date=date_str,
-                           events=event_list)
+                           selected_date=date_str)
 
 @app.route('/appointments/save', methods=['POST'])
 def save_appointments():
     require_login()
     form = request.form.to_dict()
-    date_str = form.get('date') or datetime.now().strftime('%Y-%m-%d')
+    parsed_date = parse_appointment_date(form.get('date'))
+    if parsed_date is None:
+        flash('Appointments were not saved: invalid date.')
+        return redirect(url_for('appointments_combined'))
+    date_str = parsed_date.isoformat()
 
     appointment_batches = []
+    requested_hours = set()
+    submitted_document_ids = set()
     row_num = 1
     while f"patient_name_{row_num}" in form:
-        patient_name = form.get(f"patient_name_{row_num}")
-        contact = form.get(f"contact_{row_num}", "")
+        submitted_id = form.get(f"appointment_id_{row_num}", '').strip()
+        if submitted_id:
+            submitted_document_ids.add(submitted_id)
+        patient_name = form.get(f"patient_name_{row_num}", '').strip()
+        contact = form.get(f"contact_{row_num}", "").strip()
         slots = {}
-        for hour in range(10, 21):
-            slot_value = form.get(f"slot_{row_num}_{hour}", "")
+        for hour in range(APPOINTMENT_START_HOUR, APPOINTMENT_END_HOUR + 1):
+            slot_value = form.get(f"slot_{row_num}_{hour}", "").strip()
             slots[str(hour)] = slot_value
+            if appointment_slot_is_booked(slot_value):
+                if not patient_name:
+                    flash('Appointments were not saved: every booked time requires a patient name.')
+                    return redirect(url_for('appointments_combined', date=date_str))
+                if hour in requested_hours:
+                    flash(f'Appointments were not saved: {hour:02d}:00 is already used in this schedule.')
+                    return redirect(url_for('appointments_combined', date=date_str))
+                requested_hours.add(hour)
 
-        appointment_batches.append({
+        if patient_name or contact or any(appointment_slot_is_booked(v) for v in slots.values()):
+            appointment_batches.append({
             'patient_name': patient_name,
             'contact': contact,
             'slots': slots,
             'date': date_str,
             'timestamp': datetime.now().isoformat(),
             'owner_id': current_uid()   # ✅
-        })
+            })
         row_num += 1
 
-    # Replace existing for this date & owner
-    for doc in with_owner(db.collection('appointments')).where('date', '==', date_str).stream():
+    # Re-read immediately before saving. The submitted schedule replaces this
+    # owner's selected day. Reject a booking added since the page was loaded.
+    existing_documents = appointment_documents_for_date(date_str)
+    unexpected_documents = [doc for doc in existing_documents
+                            if doc.id not in submitted_document_ids]
+    concurrent_hours = occupied_appointment_hours(unexpected_documents)
+    conflicting_hours = sorted(requested_hours & concurrent_hours)
+    if conflicting_hours:
+        times = ', '.join(f'{hour:02d}:00' for hour in conflicting_hours)
+        flash(f'Appointments were not saved because these times are no longer available: {times}.')
+        return redirect(url_for('appointments_combined', date=date_str))
+    for doc in existing_documents:
         doc.reference.delete()
 
     for batch in appointment_batches:
@@ -1581,6 +1635,18 @@ def save_appointments():
 
     flash(f"Appointments saved for {date_str}")
     return redirect(url_for('appointments_combined', date=date_str))
+
+@app.route('/appointments/availability')
+def appointment_availability():
+    require_login()
+    parsed_date = parse_appointment_date(request.args.get('date'))
+    if parsed_date is None:
+        return jsonify({'error': 'A valid date is required.'}), 400
+    date_str = parsed_date.isoformat()
+    occupied = occupied_appointment_hours(appointment_documents_for_date(date_str))
+    available = [f'{hour:02d}:00' for hour in range(APPOINTMENT_START_HOUR, APPOINTMENT_END_HOUR + 1)
+                 if hour not in occupied]
+    return jsonify({'date': date_str, 'available': available})
 
 @app.route('/appointments/json')
 def appointments_json():
@@ -1594,21 +1660,96 @@ def appointments_json():
     for doc in appointment_docs:
         data = doc.to_dict()
         result.append({
+            'id': doc.id,
             'name': data.get('patient_name'),
             'contact': data.get('contact', ''),
             'slots': data.get('slots', {})
         })
     return {'patients': result}
 
+@app.route('/appointments/<appointment_id>/reschedule', methods=['POST'])
+def reschedule_appointment(appointment_id):
+    require_login()
+    source_hour = parse_appointment_hour(request.form.get('source_hour'))
+    target_hour = parse_appointment_hour(request.form.get('hour'))
+    target_date = parse_appointment_date(request.form.get('date'))
+    if not appointment_id or source_hour is None or target_hour is None or target_date is None:
+        flash('Appointment was not rescheduled: invalid date, time, or appointment identifier.')
+        return redirect(url_for('appointments_combined'))
+
+    reference = db.collection('appointments').document(appointment_id)
+    snapshot = reference.get()
+    data = snapshot.to_dict() if snapshot.exists else None
+    if not data or data.get('owner_id') != current_uid():
+        return ('Appointment not found.', 404)
+    source_date = parse_appointment_date(data.get('date'))
+    slots = dict(data.get('slots', {}))
+    slot_value = slots.get(str(source_hour), '')
+    if source_date is None or not appointment_slot_is_booked(slot_value):
+        flash('Appointment was not rescheduled because the original time no longer exists.')
+        return redirect(url_for('appointments_combined'))
+
+    target_date_str = target_date.isoformat()
+    exclude_id = appointment_id if source_date == target_date else None
+    exclude_hour = source_hour if source_date == target_date else None
+    occupied = occupied_appointment_hours(
+        appointment_documents_for_date(target_date_str), exclude_id, exclude_hour)
+    if target_hour in occupied:
+        flash(f'Appointment was not rescheduled: {target_date_str} at {target_hour:02d}:00 is no longer available.')
+        return redirect(url_for('appointments_combined', date=source_date.isoformat()))
+
+    if source_date == target_date:
+        slots[str(source_hour)] = ''
+        slots[str(target_hour)] = slot_value
+        reference.update({'slots': slots, 'timestamp': datetime.now().isoformat()})
+    else:
+        slots[str(source_hour)] = ''
+        if any(appointment_slot_is_booked(value) for value in slots.values()):
+            reference.update({'slots': slots, 'timestamp': datetime.now().isoformat()})
+        else:
+            reference.delete()
+        new_slots = {str(hour): '' for hour in range(APPOINTMENT_START_HOUR, APPOINTMENT_END_HOUR + 1)}
+        new_slots[str(target_hour)] = slot_value
+        db.collection('appointments').add({
+            'patient_name': data.get('patient_name', ''), 'contact': data.get('contact', ''),
+            'slots': new_slots, 'date': target_date_str,
+            'timestamp': datetime.now().isoformat(), 'owner_id': current_uid()
+        })
+    flash(f'Appointment rescheduled to {target_date_str} at {target_hour:02d}:00.')
+    return redirect(url_for('appointments_combined', date=target_date_str))
+
+@app.route('/appointments/<appointment_id>/cancel', methods=['POST'])
+def cancel_appointment(appointment_id):
+    require_login()
+    hour = parse_appointment_hour(request.form.get('hour'))
+    reference = db.collection('appointments').document(appointment_id)
+    snapshot = reference.get()
+    data = snapshot.to_dict() if snapshot.exists else None
+    if hour is None or not data or data.get('owner_id') != current_uid():
+        return ('Appointment not found.', 404)
+    slots = dict(data.get('slots', {}))
+    if not appointment_slot_is_booked(slots.get(str(hour))):
+        return ('Appointment not found.', 404)
+    slots[str(hour)] = ''
+    if any(appointment_slot_is_booked(value) for value in slots.values()):
+        reference.update({'slots': slots, 'timestamp': datetime.now().isoformat()})
+    else:
+        reference.delete()
+    flash('Appointment cancelled.')
+    return redirect(url_for('appointments_combined', date=data.get('date')))
+
 @app.route('/appointments/delete', methods=['POST'])
 def delete_appointment():
     require_login()
-    patient_name = request.form.get('patient_name')
-    date = request.form.get('date')
+    patient_name = request.form.get('patient_name', '').strip()
+    parsed_date = parse_appointment_date(request.form.get('date'))
+    if not patient_name or parsed_date is None:
+        return ('Invalid appointment.', 400)
+    date_str = parsed_date.isoformat()
 
     docs = with_owner(db.collection('appointments')) \
         .where('patient_name', '==', patient_name) \
-        .where('date', '==', date).stream()
+        .where('date', '==', date_str).stream()
 
     for doc in docs:
         doc.reference.delete()
@@ -1618,25 +1759,23 @@ def delete_appointment():
 @app.route('/appointments/event_counts')
 def appointment_event_counts():
     require_login()
-    booking_counts = defaultdict(int)
-
+    events = []
     all_docs = with_owner(db.collection('appointments')).stream()
     for doc in all_docs:
         data = doc.to_dict()
-        date = data.get('date')
-        if date:
-            booking_counts[date] += 1
-
-    events = []
-    for date, count in booking_counts.items():
-        color = "#198754" if count <= 2 else "#ffc107" if count <= 5 else "#dc3545"
-        events.append({
-            'title': f"{count} bookings",
-            'start': date,
-            'allDay': True,
-            'backgroundColor': color,
-            'borderColor': color
-        })
+        parsed_date = parse_appointment_date(data.get('date'))
+        if parsed_date is None:
+            continue
+        for raw_hour, value in data.get('slots', {}).items():
+            hour = parse_appointment_hour(raw_hour)
+            if hour is not None and appointment_slot_is_booked(value):
+                start = datetime.combine(parsed_date, datetime.min.time()).replace(hour=hour)
+                events.append({
+                    'id': f'{doc.id}-{hour}',
+                    'title': data.get('patient_name') or 'Appointment',
+                    'start': start.isoformat(),
+                    'end': (start.replace(minute=59, second=59)).isoformat()
+                })
 
     return jsonify(events)
 
