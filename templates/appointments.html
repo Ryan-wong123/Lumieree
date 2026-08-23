@@ -1,213 +1,88 @@
 {% extends 'layout.html' %}
 {% block content %}
-<h4>{{ t('doctor_appointment_calendar') }}</h4>
-
-<!-- Booking Legend -->
-<div class="mb-2">
-  <span class="badge bg-success">1–2 {{ t('appointments') }}</span>
-  <span class="badge bg-warning text-dark">3–5 {{ t('appointments') }}</span>
-  <span class="badge bg-danger">6+ {{ t('appointments') }}</span>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <h4 class="mb-0">{{ t('doctor_appointment_calendar') }}</h4>
+  <div class="btn-group" aria-label="Calendar view">
+    <a class="btn btn-outline-primary {% if selected_view == 'day' %}active{% endif %}" href="{{ url_for('appointments_combined', date=selected_date, view='day') }}">Day</a>
+    <a class="btn btn-outline-primary {% if selected_view == 'week' %}active{% endif %}" href="{{ url_for('appointments_combined', date=selected_date, view='week') }}">Week</a>
+  </div>
 </div>
-
-<!-- FullCalendar Display -->
-<div id="calendar"></div>
-
-<!-- Selected Date Display -->
-<div class="d-flex align-items-center justify-content-between mt-3">
-  <h5 class="mb-0">
-    <strong>{{ t('date') }}:</strong>
-    <span id="selectedDateDisplay">{{ selected_date }}</span>
-  </h5>
+<div id="calendar" class="mb-4"></div>
+<div class="row g-4">
+  <div class="col-lg-5"><div class="card"><div class="card-body">
+    <h5 class="card-title">Find availability and book</h5>
+    <form method="post" action="{{ url_for('save_appointments') }}">
+      <label for="bookingDate" class="form-label">{{ t('date') }}</label>
+      <input class="form-control mb-2" type="date" id="bookingDate" name="date" value="{{ selected_date }}" required>
+      <button class="btn btn-outline-secondary btn-sm mb-2" type="button" id="findAvailability">Find available times</button>
+      <div id="availabilityMessage" class="small mb-3" aria-live="polite"></div>
+      <label for="bookingHour" class="form-label">Time</label>
+      <select class="form-select mb-3" id="bookingHour" name="hour" required><option value="">Select a time</option>
+        {% for hour in hours %}<option value="{{ hour }}">{{ '%02d:00'|format(hour) }}</option>{% endfor %}
+      </select>
+      <label class="form-label" for="patientName">{{ t('patient_name') }}</label>
+      <input class="form-control mb-3" id="patientName" name="patient_name" maxlength="200" required>
+      <label class="form-label" for="contact">{{ t('contact') }}</label>
+      <input class="form-control mb-3" id="contact" name="contact" maxlength="200">
+      <label class="form-label" for="purpose">Appointment reason</label>
+      <input class="form-control mb-3" id="purpose" name="purpose" maxlength="500" required>
+      <button class="btn btn-success" type="submit">Create appointment</button>
+    </form>
+  </div></div></div>
+  <div class="col-lg-7">
+    <h5>Appointments for {{ selected_date }}</h5>
+    <div class="table-responsive"><table class="table table-striped align-middle">
+      <thead><tr><th>Time</th><th>{{ t('patient_name') }}</th><th>Reason</th><th>Actions</th></tr></thead><tbody>
+      {% for appointment in patients %}<tr>
+        <td>{{ '%02d:00'|format(appointment.hour) }}</td>
+        <td>{{ appointment.name }}{% if appointment.contact %}<div class="small text-muted">{{ appointment.contact }}</div>{% endif %}</td>
+        <td>{{ appointment.purpose }}</td><td>
+          <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#reschedule-{{ loop.index }}">Reschedule</button>
+          <form method="post" action="{{ url_for('delete_appointment') }}" class="d-inline" onsubmit="return confirm('Cancel this appointment?');">
+            <input type="hidden" name="appointment_id" value="{{ appointment.id }}"><input type="hidden" name="hour" value="{{ appointment.hour }}">
+            <button class="btn btn-outline-danger btn-sm" type="submit">{{ t('cancel') }}</button>
+          </form>
+          <form method="post" action="{{ url_for('reschedule_appointment') }}" class="collapse mt-2 border rounded p-2" id="reschedule-{{ loop.index }}">
+            <input type="hidden" name="appointment_id" value="{{ appointment.id }}"><input type="hidden" name="old_hour" value="{{ appointment.hour }}">
+            <div class="row g-2"><div class="col-sm-5"><input class="form-control form-control-sm" type="date" name="new_date" value="{{ selected_date }}" required></div>
+            <div class="col-sm-4"><select class="form-select form-select-sm" name="new_hour" required>{% for hour in hours %}<option value="{{ hour }}" {% if hour == appointment.hour %}selected{% endif %}>{{ '%02d:00'|format(hour) }}</option>{% endfor %}</select></div>
+            <div class="col-sm-3"><button class="btn btn-primary btn-sm w-100" type="submit">Save</button></div></div>
+          </form>
+        </td></tr>{% else %}<tr><td colspan="4" class="text-muted">No appointments for this day.</td></tr>{% endfor %}
+      </tbody></table></div>
+  </div>
 </div>
-
-<!-- Appointment Table -->
-<form method="POST" action="/appointments/save" id="appointmentForm">
-  <input type="hidden" name="date" id="selectedDate" value="{{ selected_date }}">
-
-  <table class="table table-bordered table-sm text-center align-middle mt-3" id="appointmentTable">
-    <thead class="table-light">
-      <tr>
-        <th>{{ t('patient_name') }}</th>
-        <th>{{ t('contact') }}</th>
-        {# 10:00 → 20:00 with 12-hour AM/PM labels #}
-        {% for hour in range(10, 21) %}
-          {% set start_display = ((hour - 1) % 12 + 1) %}
-          <th>{{ start_display }}</th>
-        {% endfor %}
-        <th>{{ t('cancel') }}</th>
-      </tr>
-    </thead>
-    <tbody id="appointmentBody">
-      {% if patients|length == 0 %}
-        {# Show one empty row by default when no appointments #}
-        <tr>
-          <td><input type="text" class="form-control" name="patient_name_1"></td>
-          <td><input type="text" class="form-control" name="contact_1"></td>
-          {% for hour in range(10, 21) %}
-          <td><input type="text" class="form-control" name="slot_1_{{ hour }}"></td>
-          {% endfor %}
-          <td></td>
-        </tr>
-      {% else %}
-        {% for patient in patients %}
-        {% set row_index = loop.index %}
-        <tr>
-          <td><input type="text" class="form-control" name="patient_name_{{ row_index }}" value="{{ patient.name }}"></td>
-          <td><input type="text" class="form-control" name="contact_{{ row_index }}" value="{{ patient.contact }}"></td>
-          {% for hour in range(10, 21) %}
-          <td>
-            <input type="text" class="form-control" name="slot_{{ row_index }}_{{ hour }}"
-                   value="{{ appointments.get(patient.name, {}).get(hour|string, '') }}">
-          </td>
-          {% endfor %}
-          <td>
-            <button type="button" class="btn btn-sm btn-danger" onclick="cancelAppointment(this, '{{ patient.name }}')">✖</button>
-          </td>
-        </tr>
-        {% endfor %}
-      {% endif %}
-    </tbody>
-  </table>
-
-  <button type="button" class="btn btn-outline-primary" onclick="addRow()">+ {{ t('add_patient') }}</button>
-  <button type="submit" class="btn btn-success mt-3">{{ t('save_appointments') }}</button>
-</form>
-
-<!-- FullCalendar CSS + JS -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/locales-all.min.js"></script>
-
 <script>
-  let calendar;
-
-  function toYMD(d) {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  function loadFor(dateStr) {
-    fetch(`/appointments/json?date=${dateStr}`)
-      .then(res => res.json())
-      .then(data => {
-        updateTable(data);
-        document.getElementById('selectedDate').value = dateStr;
-        document.getElementById('selectedDateDisplay').innerText = dateStr;
-      });
-  }
-
-  function highlightDay(ymd) {
-    if (!calendar) return;
-    calendar.unselect();
-    const start = new Date(ymd);
-    const end = new Date(ymd);
-    end.setDate(end.getDate() + 1);
-    calendar.select(start, end);
-  }
-
-  document.addEventListener('DOMContentLoaded', function () {
-    const initial = "{{ selected_date }}";
-
-    calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
-      initialView: 'dayGridMonth',
-      locale: "{{ g.lang }}",
-      height: 600,
-      customButtons: {
-        myToday: {
-          text: 'Today',
-          click: function () {
-            calendar.today();
-            const todayStr = toYMD(new Date());
-            loadFor(todayStr);
-            highlightDay(todayStr);
-          }
-        }
-      },
-      headerToolbar: { left: 'prev,next myToday', center: 'title', right: '' },
-      selectable: true,
-      selectMirror: true,
-      dateClick: function (info) {
-        const ymd = info.dateStr;
-        loadFor(ymd);
-        highlightDay(ymd);
-      },
-      events: { url: '/appointments/event_counts' }
-    });
-
-    calendar.render();
-    document.getElementById('selectedDateDisplay').innerText = initial;
-    document.getElementById('selectedDate').value = initial;
-    highlightDay(initial);
+document.addEventListener('DOMContentLoaded', function () {
+  const selectedDate = {{ selected_date|tojson }};
+  const selectedView = {{ selected_view|tojson }};
+  const calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+    initialDate: selectedDate, initialView: selectedView === 'week' ? 'timeGridWeek' : 'timeGridDay',
+    locale: {{ g.lang|tojson }}, height: 560, slotMinTime: '10:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
+    headerToolbar: { left: 'prev,next today', center: 'title', right: '' }, events: '/appointments/event_counts',
+    dateClick: info => window.location.assign(`/appointments?date=${encodeURIComponent(info.dateStr.slice(0, 10))}&view=${selectedView}`)
   });
-
-  // Start at 2 if we rendered a blank row; else patients.length + 1
-  let rowCount = {{ (patients|length if (patients|length > 0) else 1) }} + 1;
-
-  function addRow() {
-    const tbody = document.getElementById('appointmentBody');
-    let rowHTML = `<tr>
-      <td><input type="text" class="form-control" name="patient_name_${rowCount}"></td>
-      <td><input type="text" class="form-control" name="contact_${rowCount}"></td>`;
-    for (let hour = 10; hour < 21; hour++) {
-      rowHTML += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}"></td>`;
-    }
-    rowHTML += `<td></td></tr>`;
-    tbody.insertAdjacentHTML('beforeend', rowHTML);
-    rowCount++;
+  calendar.render();
+  async function findAvailability() {
+    const date = document.getElementById('bookingDate').value;
+    const message = document.getElementById('availabilityMessage');
+    const select = document.getElementById('bookingHour');
+    message.textContent = 'Checking availability…';
+    try {
+      const response = await fetch(`/appointments/availability?date=${encodeURIComponent(date)}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Availability check failed.');
+      const available = new Set(data.available_hours.map(String));
+      Array.from(select.options).forEach(option => { if (option.value) option.disabled = !available.has(option.value); });
+      if (select.value && !available.has(select.value)) select.value = '';
+      message.textContent = data.available_hours.length ? `Available: ${data.available_hours.map(hour => String(hour).padStart(2, '0') + ':00').join(', ')}` : 'No appointment times are available on this date.';
+    } catch (error) { message.textContent = error.message; }
   }
-
-  function updateTable(data) {
-    const tbody = document.getElementById('appointmentBody');
-    tbody.innerHTML = '';
-    rowCount = 1;
-
-    if (!data.patients || data.patients.length === 0) {
-      let emptyRow = `<tr>
-        <td><input type="text" class="form-control" name="patient_name_${rowCount}"></td>
-        <td><input type="text" class="form-control" name="contact_${rowCount}"></td>`;
-      for (let hour = 10; hour < 21; hour++) {
-        emptyRow += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}"></td>`;
-      }
-      emptyRow += `<td></td></tr>`;
-      tbody.insertAdjacentHTML('beforeend', emptyRow);
-      rowCount = 2;
-      return;
-    }
-
-    for (const entry of data.patients) {
-      let row = `<tr>
-        <td><input type="text" class="form-control" name="patient_name_${rowCount}" value="${entry.name || ''}"></td>
-        <td><input type="text" class="form-control" name="contact_${rowCount}" value="${entry.contact || ''}"></td>`;
-      for (let hour = 10; hour < 21; hour++) {
-        const value = (entry.slots && entry.slots[String(hour)]) || '';
-        row += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}" value="${value}"></td>`;
-      }
-      row += `<td><button type="button" class="btn btn-sm btn-danger" onclick="cancelAppointment(this, '${entry.name || ''}')">✖</button></td>`;
-      row += `</tr>`;
-      tbody.insertAdjacentHTML('beforeend', row);
-      rowCount++;
-    }
-  }
-
-  function cancelAppointment(button, patientName) {
-    const date = document.getElementById("selectedDate").value;
-    if (!patientName) return;
-    if (!confirm(`Cancel appointment for ${patientName} on ${date}?`)) return;
-
-    fetch('/appointments/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `patient_name=${encodeURIComponent(patientName)}&date=${encodeURIComponent(date)}`
-    }).then(res => {
-      if (res.status === 204) {
-        button.closest('tr').remove();
-        calendar.refetchEvents();
-      } else {
-        alert("Failed to cancel appointment.");
-      }
-    });
-  }
+  document.getElementById('findAvailability').addEventListener('click', findAvailability);
+  document.getElementById('bookingDate').addEventListener('change', findAvailability);
+  findAvailability();
+});
 </script>
 {% endblock %}
