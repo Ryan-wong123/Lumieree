@@ -1,213 +1,80 @@
 {% extends 'layout.html' %}
 {% block content %}
-<h4>{{ t('doctor_appointment_calendar') }}</h4>
-
-<!-- Booking Legend -->
-<div class="mb-2">
-  <span class="badge bg-success">1–2 {{ t('appointments') }}</span>
-  <span class="badge bg-warning text-dark">3–5 {{ t('appointments') }}</span>
-  <span class="badge bg-danger">6+ {{ t('appointments') }}</span>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div><h4 class="mb-0">Appointment calendar</h4><small class="text-muted">Clinic timezone: {{ timezone }}</small></div>
 </div>
 
-<!-- FullCalendar Display -->
+<div class="card mb-4"><div class="card-body">
+  <h5 id="formTitle">Book an appointment</h5>
+  <form method="POST" action="{{ url_for('save_appointments') }}" id="bookingForm" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="appointment_id" id="appointmentId">
+    <div class="col-md-4"><label class="form-label">Patient</label>
+      <select name="patient_id" id="patientId" class="form-select" required {% if not can_book_for_others %}readonly{% endif %}>
+        {% for patient in patients %}<option value="{{ patient.id }}">{{ patient.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4"><label class="form-label">Service</label>
+      <select name="service" id="service" class="form-select" required><option value="">Select a service</option>
+        {% for service in services %}<option value="{{ service }}">{{ service }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4"><label class="form-label">Duration</label>
+      <select name="duration_minutes" id="duration" class="form-select" required>
+        {% for duration in [15, 30, 45, 60, 90, 120] %}<option value="{{ duration }}" {% if duration == 30 %}selected{% endif %}>{{ duration }} minutes</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4"><label class="form-label">Practitioner</label>
+      <select name="practitioner_id" id="practitioner" class="form-select" required><option value="">Select a practitioner</option>
+        {% for practitioner in practitioners %}<option value="{{ practitioner.id }}">{{ practitioner.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4"><label class="form-label">Date</label><input type="date" name="date" id="bookingDate" value="{{ today }}" class="form-control" required></div>
+    <div class="col-md-4"><label class="form-label">Available time</label><select name="time" id="bookingTime" class="form-select" required><option value="">Choose practitioner and date</option></select></div>
+    {% if not can_book_for_others %}<div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="reminder_allowed" id="reminderAllowed"><label class="form-check-label" for="reminderAllowed">I consent to appointment confirmations and reminders.</label></div></div>{% endif %}
+    <div class="col-12"><button class="btn btn-success" type="submit">Save appointment</button><button class="btn btn-outline-secondary ms-2 d-none" type="button" id="clearEdit">Stop editing</button></div>
+  </form>
+</div></div>
+
 <div id="calendar"></div>
+<div class="modal fade" id="appointmentModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="modalTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body" id="modalBody"></div><div class="modal-footer"><form method="POST" id="cancelForm"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-danger" type="submit" onclick="return confirm('Cancel this appointment?')">Cancel appointment</button></form><button class="btn btn-primary" id="rescheduleButton" data-bs-dismiss="modal">Reschedule</button></div></div></div></div>
 
-<!-- Selected Date Display -->
-<div class="d-flex align-items-center justify-content-between mt-3">
-  <h5 class="mb-0">
-    <strong>{{ t('date') }}:</strong>
-    <span id="selectedDateDisplay">{{ selected_date }}</span>
-  </h5>
-</div>
-
-<!-- Appointment Table -->
-<form method="POST" action="/appointments/save" id="appointmentForm">
-  <input type="hidden" name="date" id="selectedDate" value="{{ selected_date }}">
-
-  <table class="table table-bordered table-sm text-center align-middle mt-3" id="appointmentTable">
-    <thead class="table-light">
-      <tr>
-        <th>{{ t('patient_name') }}</th>
-        <th>{{ t('contact') }}</th>
-        {# 10:00 → 20:00 with 12-hour AM/PM labels #}
-        {% for hour in range(10, 21) %}
-          {% set start_display = ((hour - 1) % 12 + 1) %}
-          <th>{{ start_display }}</th>
-        {% endfor %}
-        <th>{{ t('cancel') }}</th>
-      </tr>
-    </thead>
-    <tbody id="appointmentBody">
-      {% if patients|length == 0 %}
-        {# Show one empty row by default when no appointments #}
-        <tr>
-          <td><input type="text" class="form-control" name="patient_name_1"></td>
-          <td><input type="text" class="form-control" name="contact_1"></td>
-          {% for hour in range(10, 21) %}
-          <td><input type="text" class="form-control" name="slot_1_{{ hour }}"></td>
-          {% endfor %}
-          <td></td>
-        </tr>
-      {% else %}
-        {% for patient in patients %}
-        {% set row_index = loop.index %}
-        <tr>
-          <td><input type="text" class="form-control" name="patient_name_{{ row_index }}" value="{{ patient.name }}"></td>
-          <td><input type="text" class="form-control" name="contact_{{ row_index }}" value="{{ patient.contact }}"></td>
-          {% for hour in range(10, 21) %}
-          <td>
-            <input type="text" class="form-control" name="slot_{{ row_index }}_{{ hour }}"
-                   value="{{ appointments.get(patient.name, {}).get(hour|string, '') }}">
-          </td>
-          {% endfor %}
-          <td>
-            <button type="button" class="btn btn-sm btn-danger" onclick="cancelAppointment(this, '{{ patient.name }}')">✖</button>
-          </td>
-        </tr>
-        {% endfor %}
-      {% endif %}
-    </tbody>
-  </table>
-
-  <button type="button" class="btn btn-outline-primary" onclick="addRow()">+ {{ t('add_patient') }}</button>
-  <button type="submit" class="btn btn-success mt-3">{{ t('save_appointments') }}</button>
-</form>
-
-<!-- FullCalendar CSS + JS -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/locales-all.min.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/luxon3@6.1.8/index.global.min.js"></script>
 <script>
-  let calendar;
-
-  function toYMD(d) {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+document.addEventListener('DOMContentLoaded', () => {
+  const practitioner = document.getElementById('practitioner'), date = document.getElementById('bookingDate');
+  const duration = document.getElementById('duration'), time = document.getElementById('bookingTime');
+  async function loadSlots(preferred='') {
+    if (!practitioner.value || !date.value) { time.innerHTML = '<option value="">Choose practitioner and date</option>'; return; }
+    time.innerHTML = '<option value="">Loading…</option>';
+    const params = new URLSearchParams({practitioner_id: practitioner.value, date: date.value, duration: duration.value});
+    const response = await fetch(`/appointments/available-slots?${params}`), data = await response.json();
+    if (!response.ok) { time.innerHTML = `<option value="">${data.error || 'Unable to load slots'}</option>`; return; }
+    const slots = data.slots || []; if (preferred && !slots.includes(preferred)) slots.unshift(preferred);
+    time.innerHTML = slots.length ? slots.map(slot => `<option value="${slot}" ${slot === preferred ? 'selected' : ''}>${slot}</option>`).join('') : '<option value="">No available times</option>';
   }
-
-  function loadFor(dateStr) {
-    fetch(`/appointments/json?date=${dateStr}`)
-      .then(res => res.json())
-      .then(data => {
-        updateTable(data);
-        document.getElementById('selectedDate').value = dateStr;
-        document.getElementById('selectedDateDisplay').innerText = dateStr;
-      });
-  }
-
-  function highlightDay(ymd) {
-    if (!calendar) return;
-    calendar.unselect();
-    const start = new Date(ymd);
-    const end = new Date(ymd);
-    end.setDate(end.getDate() + 1);
-    calendar.select(start, end);
-  }
-
-  document.addEventListener('DOMContentLoaded', function () {
-    const initial = "{{ selected_date }}";
-
-    calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
-      initialView: 'dayGridMonth',
-      locale: "{{ g.lang }}",
-      height: 600,
-      customButtons: {
-        myToday: {
-          text: 'Today',
-          click: function () {
-            calendar.today();
-            const todayStr = toYMD(new Date());
-            loadFor(todayStr);
-            highlightDay(todayStr);
-          }
-        }
-      },
-      headerToolbar: { left: 'prev,next myToday', center: 'title', right: '' },
-      selectable: true,
-      selectMirror: true,
-      dateClick: function (info) {
-        const ymd = info.dateStr;
-        loadFor(ymd);
-        highlightDay(ymd);
-      },
-      events: { url: '/appointments/event_counts' }
-    });
-
-    calendar.render();
-    document.getElementById('selectedDateDisplay').innerText = initial;
-    document.getElementById('selectedDate').value = initial;
-    highlightDay(initial);
-  });
-
-  // Start at 2 if we rendered a blank row; else patients.length + 1
-  let rowCount = {{ (patients|length if (patients|length > 0) else 1) }} + 1;
-
-  function addRow() {
-    const tbody = document.getElementById('appointmentBody');
-    let rowHTML = `<tr>
-      <td><input type="text" class="form-control" name="patient_name_${rowCount}"></td>
-      <td><input type="text" class="form-control" name="contact_${rowCount}"></td>`;
-    for (let hour = 10; hour < 21; hour++) {
-      rowHTML += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}"></td>`;
+  [practitioner, date, duration].forEach(el => el.addEventListener('change', () => loadSlots()));
+  const calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+    initialView: 'timeGridWeek', timeZone: {{ timezone|tojson }}, height: 700,
+    headerToolbar: {left: 'prev,next today', center: 'title', right: 'timeGridDay,timeGridWeek'},
+    events: '/appointments/events', eventClick(info) {
+      const p = info.event.extendedProps;
+      document.getElementById('modalTitle').textContent = info.event.title;
+      document.getElementById('modalBody').textContent = `${p.local_date} ${p.local_time} ({{ timezone }}), ${p.duration_minutes} minutes`;
+      document.getElementById('cancelForm').action = `/appointments/${info.event.id}/cancel`;
+      document.getElementById('rescheduleButton').onclick = async () => {
+        document.getElementById('appointmentId').value = info.event.id; document.getElementById('patientId').value = p.patient_id;
+        practitioner.value = p.practitioner_id; document.getElementById('service').value = p.service; duration.value = p.duration_minutes;
+        date.value = p.local_date; document.getElementById('formTitle').textContent = 'Reschedule appointment'; document.getElementById('clearEdit').classList.remove('d-none');
+        await loadSlots(p.local_time); document.getElementById('bookingForm').scrollIntoView({behavior:'smooth'});
+      };
+      new bootstrap.Modal(document.getElementById('appointmentModal')).show();
     }
-    rowHTML += `<td></td></tr>`;
-    tbody.insertAdjacentHTML('beforeend', rowHTML);
-    rowCount++;
-  }
-
-  function updateTable(data) {
-    const tbody = document.getElementById('appointmentBody');
-    tbody.innerHTML = '';
-    rowCount = 1;
-
-    if (!data.patients || data.patients.length === 0) {
-      let emptyRow = `<tr>
-        <td><input type="text" class="form-control" name="patient_name_${rowCount}"></td>
-        <td><input type="text" class="form-control" name="contact_${rowCount}"></td>`;
-      for (let hour = 10; hour < 21; hour++) {
-        emptyRow += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}"></td>`;
-      }
-      emptyRow += `<td></td></tr>`;
-      tbody.insertAdjacentHTML('beforeend', emptyRow);
-      rowCount = 2;
-      return;
-    }
-
-    for (const entry of data.patients) {
-      let row = `<tr>
-        <td><input type="text" class="form-control" name="patient_name_${rowCount}" value="${entry.name || ''}"></td>
-        <td><input type="text" class="form-control" name="contact_${rowCount}" value="${entry.contact || ''}"></td>`;
-      for (let hour = 10; hour < 21; hour++) {
-        const value = (entry.slots && entry.slots[String(hour)]) || '';
-        row += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}" value="${value}"></td>`;
-      }
-      row += `<td><button type="button" class="btn btn-sm btn-danger" onclick="cancelAppointment(this, '${entry.name || ''}')">✖</button></td>`;
-      row += `</tr>`;
-      tbody.insertAdjacentHTML('beforeend', row);
-      rowCount++;
-    }
-  }
-
-  function cancelAppointment(button, patientName) {
-    const date = document.getElementById("selectedDate").value;
-    if (!patientName) return;
-    if (!confirm(`Cancel appointment for ${patientName} on ${date}?`)) return;
-
-    fetch('/appointments/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `patient_name=${encodeURIComponent(patientName)}&date=${encodeURIComponent(date)}`
-    }).then(res => {
-      if (res.status === 204) {
-        button.closest('tr').remove();
-        calendar.refetchEvents();
-      } else {
-        alert("Failed to cancel appointment.");
-      }
-    });
-  }
+  }); calendar.render();
+  document.getElementById('clearEdit').onclick = () => { document.getElementById('bookingForm').reset(); document.getElementById('appointmentId').value=''; document.getElementById('formTitle').textContent='Book an appointment'; document.getElementById('clearEdit').classList.add('d-none'); loadSlots(); };
+});
 </script>
 {% endblock %}

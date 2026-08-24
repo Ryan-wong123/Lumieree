@@ -3,7 +3,7 @@
 
 from flask import Flask, render_template, request, redirect, url_for, flash,Response,send_file,jsonify,session,g
 from firebase_admin import credentials, firestore, initialize_app, auth
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from PIL import Image
 import io
 import pandas as pd
@@ -19,8 +19,11 @@ import requests
 import re
 import csv
 import uuid
+import secrets
 from werkzeug.utils import secure_filename
 import click
+from scheduling import (SchedulingError, available_slots, can_manage, clinic_zone, is_available,
+                        local_slot, lock_keys, parse_utc, utc_iso)
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -1269,7 +1272,10 @@ def generate_receipt_pdf():
 
 @app.route('/front_desk')
 def front_desk():
-    require_login()
+    deny = require_login()
+    if deny: return deny
+    if session.get('role') not in STAFF_BOOKING_ROLES:
+        return ('Access denied.', 403)
 
     # Pull this user's queue items, newest first
     queue = with_owner(db.collection('front_desk_queue')) \
@@ -1504,141 +1510,199 @@ def export_queue_csv():
     )
 
 # =================== Appointment ===================
+STAFF_BOOKING_ROLES = {'staff', 'front_desk', 'practitioner', 'admin', 'super_admin'}
+DEFAULT_TIMEZONE = 'Asia/Singapore'
+DEFAULT_SCHEDULE = {str(day): ([{'start': '09:00', 'end': '18:00'}] if day < 6 else []) for day in range(7)}
+
+def booking_identity():
+    uid = current_uid()
+    snap = db.collection('users').document(uid).get()
+    user = snap.to_dict() if snap.exists else {}
+    return user.get('clinic_owner_id') or uid, user.get('patient_id')
+
+def booking_config(owner_id):
+    snap = db.collection('clinic_settings').document(owner_id).get()
+    data = snap.to_dict() if snap.exists else {}
+    return {'timezone': data.get('timezone', DEFAULT_TIMEZONE),
+            'schedules': data.get('schedules', {}),
+            'reminders_enabled': bool(data.get('reminders_enabled', False))}
+
+def booking_csrf_token():
+    if 'booking_csrf_token' not in session:
+        session['booking_csrf_token'] = secrets.token_urlsafe(32)
+    return session['booking_csrf_token']
+
+def valid_booking_csrf():
+    supplied = request.form.get('csrf_token', '')
+    expected = session.get('booking_csrf_token', '')
+    return bool(supplied and expected and secrets.compare_digest(supplied, expected))
+
+def practitioner_options(owner_id):
+    result = {}
+    owner = db.collection('users').document(owner_id).get()
+    if owner.exists:
+        d = owner.to_dict(); result[owner_id] = d.get('name') or d.get('email') or 'Primary practitioner'
+    for doc in db.collection('users').where('created_by', '==', owner_id).stream():
+        d = doc.to_dict()
+        if d.get('active', True) and d.get('role') in STAFF_BOOKING_ROLES:
+            result[doc.id] = d.get('name') or d.get('email') or doc.id
+    if not result: result[owner_id] = 'Primary practitioner'
+    return [{'id': key, 'name': value} for key, value in sorted(result.items(), key=lambda item: item[1])]
+
+def can_manage_appointment(data, owner_id, patient_id):
+    return can_manage(session.get('role'), data.get('owner_id'), owner_id,
+                      data.get('patient_id'), patient_id, STAFF_BOOKING_ROLES)
+
+def persist_appointment(appointment_id, payload, previous=None):
+    """Reserve deterministic five-minute lock documents in the same transaction."""
+    new_keys = lock_keys(payload['practitioner_id'], parse_utc(payload['start_at']), parse_utc(payload['end_at']))
+    old_keys = lock_keys(previous['practitioner_id'], parse_utc(previous['start_at']), parse_utc(previous['end_at'])) if previous else []
+    refs = {key: db.collection('appointment_locks').document(f"{payload['owner_id']}_{key}") for key in set(new_keys + old_keys)}
+    transaction = db.transaction()
+    @firestore.transactional
+    def reserve(tx):
+        snaps = {key: ref.get(transaction=tx) for key, ref in refs.items()}
+        for key in new_keys:
+            if snaps[key].exists and snaps[key].to_dict().get('appointment_id') != appointment_id:
+                raise SchedulingError('That practitioner slot is no longer available.')
+        for key in old_keys:
+            if key not in new_keys and snaps[key].exists and snaps[key].to_dict().get('appointment_id') == appointment_id:
+                tx.delete(refs[key])
+        for key in new_keys: tx.set(refs[key], {'appointment_id': appointment_id, 'owner_id': payload['owner_id']})
+        tx.set(db.collection('appointments').document(appointment_id), payload)
+    reserve(transaction)
+
 @app.route('/appointments')
 def appointments_combined():
-    require_login()
-    date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
-
-    # Load bookings for selected date
-    appointment_docs = with_owner(db.collection('appointments'))\
-        .where('date', '==', date_str).stream()
+    deny = require_login()
+    if deny: return deny
+    owner_id, linked_patient_id = booking_identity(); role = session.get('role', 'staff')
+    config = booking_config(owner_id)
+    try: today = datetime.now(clinic_zone(config['timezone'])).date().isoformat()
+    except SchedulingError: config['timezone'] = DEFAULT_TIMEZONE; today = datetime.now(clinic_zone(DEFAULT_TIMEZONE)).date().isoformat()
     patients = []
-    appointment_data = {}
-    for doc in appointment_docs:
-        data = doc.to_dict()
-        name = data['patient_name']
-        contact = data.get('contact', '')
-        patients.append({'name': name, 'contact': contact})
-        appointment_data[name] = data.get('slots', {})
-
-    # Count bookings per day for calendar coloring
-    all_docs = with_owner(db.collection('appointments')).stream()
-    booking_counts = defaultdict(int)
-    for doc in all_docs:
-        data = doc.to_dict()
-        if 'date' in data:
-            booking_counts[data['date']] += 1
-
-    event_list = []
-    for date, count in booking_counts.items():
-        color = "#198754" if count <= 2 else "#ffc107" if count <= 5 else "#dc3545"
-        event_list.append({
-            'title': f"{count} bookings",
-            'start': date,
-            'allDay': True,
-            'backgroundColor': color,
-            'borderColor': color
-        })
-
-    return render_template('appointments.html',
-                           patients=patients,
-                           appointments=appointment_data,
-                           selected_date=date_str,
-                           events=event_list)
+    if role in STAFF_BOOKING_ROLES:
+        for doc in db.collection('patients').where('owner_id', '==', owner_id).stream():
+            patients.append({'id': doc.id, 'name': doc.to_dict().get('name', 'Unnamed patient')})
+    elif role == 'patient' and linked_patient_id:
+        snap = db.collection('patients').document(linked_patient_id).get()
+        if snap.exists and snap.to_dict().get('owner_id') == owner_id:
+            patients = [{'id': snap.id, 'name': snap.to_dict().get('name', 'Patient')}]
+    else: return ('Patient account is not linked to a clinic patient record.', 403)
+    return render_template('appointments.html', patients=patients, practitioners=practitioner_options(owner_id),
+        services=SERVICE_CATALOG, timezone=config['timezone'], today=today, can_book_for_others=role in STAFF_BOOKING_ROLES,
+        csrf_token=booking_csrf_token())
 
 @app.route('/appointments/save', methods=['POST'])
 def save_appointments():
-    require_login()
-    form = request.form.to_dict()
-    date_str = form.get('date') or datetime.now().strftime('%Y-%m-%d')
+    deny = require_login()
+    if deny: return deny
+    if not valid_booking_csrf(): return ('Invalid or expired form token.', 400)
+    owner_id, linked_patient_id = booking_identity(); role = session.get('role', 'staff')
+    appointment_id = request.form.get('appointment_id', '').strip(); previous = None
+    patient_id = request.form.get('patient_id', '').strip()
+    if appointment_id:
+        snap = db.collection('appointments').document(appointment_id).get(); previous = snap.to_dict() if snap.exists else None
+        if not previous or not can_manage_appointment(previous, owner_id, linked_patient_id): return ('Appointment not found or access denied.', 403)
+        if role == 'patient': patient_id = previous['patient_id']
+    elif role == 'patient': patient_id = linked_patient_id
+    elif role not in STAFF_BOOKING_ROLES: return ('Access denied.', 403)
+    patient = db.collection('patients').document(patient_id).get() if patient_id else None
+    if not patient or not patient.exists or patient.to_dict().get('owner_id') != owner_id:
+        flash('Select a valid patient.'); return redirect(url_for('appointments_combined'))
+    practitioners = {p['id']: p['name'] for p in practitioner_options(owner_id)}
+    practitioner_id = request.form.get('practitioner_id', '').strip(); service = request.form.get('service', '').strip()
+    if practitioner_id not in practitioners or service not in SERVICE_CATALOG:
+        flash('Select a valid practitioner and service.'); return redirect(url_for('appointments_combined'))
+    config = booking_config(owner_id)
+    try:
+        start, end = local_slot(request.form.get('date'), request.form.get('time'), request.form.get('duration_minutes'), config['timezone'])
+        if not is_available(start, end, config['schedules'].get(practitioner_id, DEFAULT_SCHEDULE)):
+            raise SchedulingError('The requested time is outside practitioner availability.')
+        now = datetime.now(timezone.utc).isoformat()
+        payload = {'owner_id': owner_id, 'patient_id': patient_id, 'patient_name': patient.to_dict().get('name', 'Patient'),
+            'practitioner_id': practitioner_id, 'practitioner_name': practitioners[practitioner_id], 'service': service,
+            'duration_minutes': int(request.form['duration_minutes']), 'start_at': utc_iso(start), 'end_at': utc_iso(end),
+            'date': start.strftime('%Y-%m-%d'), 'local_time': start.strftime('%H:%M'), 'clinic_timezone': config['timezone'],
+            'status': 'booked', 'created_at': (previous or {}).get('created_at', now), 'updated_at': now,
+            'reminder_allowed': request.form.get('reminder_allowed') == 'on' if role == 'patient' else bool((previous or {}).get('reminder_allowed'))}
+        persist_appointment(appointment_id or uuid.uuid4().hex, payload, previous)
+    except (SchedulingError, ValueError) as exc:
+        flash(str(exc)); return redirect(url_for('appointments_combined'))
+    flash('Appointment rescheduled.' if appointment_id else 'Appointment booked.')
+    return redirect(url_for('appointments_combined'))
 
-    appointment_batches = []
-    row_num = 1
-    while f"patient_name_{row_num}" in form:
-        patient_name = form.get(f"patient_name_{row_num}")
-        contact = form.get(f"contact_{row_num}", "")
-        slots = {}
-        for hour in range(10, 21):
-            slot_value = form.get(f"slot_{row_num}_{hour}", "")
-            slots[str(hour)] = slot_value
+@app.route('/appointments/<appointment_id>/cancel', methods=['POST'])
+def cancel_appointment(appointment_id):
+    deny = require_login()
+    if deny: return deny
+    if not valid_booking_csrf(): return ('Invalid or expired form token.', 400)
+    owner_id, linked_patient_id = booking_identity(); ref = db.collection('appointments').document(appointment_id)
+    snap = ref.get(); data = snap.to_dict() if snap.exists else None
+    if not data or not can_manage_appointment(data, owner_id, linked_patient_id): return ('Appointment not found or access denied.', 403)
+    batch = db.batch()
+    for key in lock_keys(data['practitioner_id'], parse_utc(data['start_at']), parse_utc(data['end_at'])):
+        batch.delete(db.collection('appointment_locks').document(f"{owner_id}_{key}"))
+    batch.update(ref, {'status': 'cancelled', 'cancelled_at': datetime.now(timezone.utc).isoformat()}); batch.commit()
+    flash('Appointment cancelled.'); return redirect(url_for('appointments_combined'))
 
-        appointment_batches.append({
-            'patient_name': patient_name,
-            'contact': contact,
-            'slots': slots,
-            'date': date_str,
-            'timestamp': datetime.now().isoformat(),
-            'owner_id': current_uid()   # ✅
-        })
-        row_num += 1
-
-    # Replace existing for this date & owner
-    for doc in with_owner(db.collection('appointments')).where('date', '==', date_str).stream():
-        doc.reference.delete()
-
-    for batch in appointment_batches:
-        db.collection('appointments').add(batch)
-
-    flash(f"Appointments saved for {date_str}")
-    return redirect(url_for('appointments_combined', date=date_str))
-
-@app.route('/appointments/json')
-def appointments_json():
-    require_login()
-    date_str = request.args.get('date')
-    if not date_str:
-        return {'patients': []}
-
-    appointment_docs = with_owner(db.collection('appointments')).where('date', '==', date_str).stream()
-    result = []
-    for doc in appointment_docs:
-        data = doc.to_dict()
-        result.append({
-            'name': data.get('patient_name'),
-            'contact': data.get('contact', ''),
-            'slots': data.get('slots', {})
-        })
-    return {'patients': result}
-
-@app.route('/appointments/delete', methods=['POST'])
-def delete_appointment():
-    require_login()
-    patient_name = request.form.get('patient_name')
-    date = request.form.get('date')
-
-    docs = with_owner(db.collection('appointments')) \
-        .where('patient_name', '==', patient_name) \
-        .where('date', '==', date).stream()
-
-    for doc in docs:
-        doc.reference.delete()
-
-    return '', 204
-
+@app.route('/appointments/events')
 @app.route('/appointments/event_counts')
-def appointment_event_counts():
-    require_login()
-    booking_counts = defaultdict(int)
-
-    all_docs = with_owner(db.collection('appointments')).stream()
-    for doc in all_docs:
+def appointment_events():
+    deny = require_login()
+    if deny: return jsonify([]), 401
+    owner_id, linked_patient_id = booking_identity(); role = session.get('role', 'staff'); events = []
+    if role not in STAFF_BOOKING_ROLES and role != 'patient': return jsonify([]), 403
+    config = booking_config(owner_id)
+    try:
+        zone = clinic_zone(config['timezone'])
+        range_start = parse_utc(request.args.get('start')).astimezone(zone).date()
+        range_end = min(parse_utc(request.args.get('end')).astimezone(zone).date(), range_start + timedelta(days=45))
+        cursor = range_start
+        practitioners = practitioner_options(owner_id)
+        while cursor < range_end:
+            day_text = cursor.isoformat()
+            for practitioner in practitioners:
+                schedule = config['schedules'].get(practitioner['id'], DEFAULT_SCHEDULE)
+                for period in schedule.get(str(cursor.weekday()), []):
+                    available_start, _ = local_slot(day_text, period['start'], 5, config['timezone'])
+                    available_end, _ = local_slot(day_text, period['end'], 5, config['timezone'])
+                    events.append({'title': f"{practitioner['name']} available", 'start': utc_iso(available_start),
+                                   'end': utc_iso(available_end), 'display': 'background', 'backgroundColor': '#d1e7dd'})
+            cursor += timedelta(days=1)
+    except (SchedulingError, TypeError, ValueError):
+        pass
+    for doc in db.collection('appointments').where('owner_id', '==', owner_id).stream():
         data = doc.to_dict()
-        date = data.get('date')
-        if date:
-            booking_counts[date] += 1
-
-    events = []
-    for date, count in booking_counts.items():
-        color = "#198754" if count <= 2 else "#ffc107" if count <= 5 else "#dc3545"
-        events.append({
-            'title': f"{count} bookings",
-            'start': date,
-            'allDay': True,
-            'backgroundColor': color,
-            'borderColor': color
-        })
-
+        if 'start_at' not in data:
+            if role != 'patient':
+                for hour, value in data.get('slots', {}).items():
+                    if value:
+                        events.append({'title': f"{data.get('patient_name', 'Patient')} — {value}",
+                                       'start': f"{data.get('date')}T{int(hour):02d}:00:00", 'editable': False})
+            continue
+        if data.get('status') != 'booked' or (role == 'patient' and data.get('patient_id') != linked_patient_id): continue
+        events.append({'id': doc.id, 'title': f"{data.get('patient_name')} — {data.get('service')}", 'start': data['start_at'], 'end': data['end_at'],
+            'extendedProps': {'patient_id': data.get('patient_id'), 'practitioner_id': data.get('practitioner_id'), 'service': data.get('service'),
+                              'duration_minutes': data.get('duration_minutes'), 'local_date': data.get('date'), 'local_time': data.get('local_time')}})
     return jsonify(events)
+
+@app.route('/appointments/available-slots')
+def appointment_available_slots():
+    deny = require_login()
+    if deny: return jsonify([]), 401
+    owner_id, _ = booking_identity(); config = booking_config(owner_id); practitioner_id = request.args.get('practitioner_id', '')
+    if practitioner_id not in {p['id'] for p in practitioner_options(owner_id)}: return jsonify({'error': 'Invalid practitioner'}), 400
+    try:
+        booked = []
+        for doc in db.collection('appointments').where('owner_id', '==', owner_id).stream():
+            data = doc.to_dict()
+            if data.get('status') == 'booked' and data.get('practitioner_id') == practitioner_id and 'start_at' in data:
+                booked.append((parse_utc(data['start_at']).astimezone(clinic_zone(config['timezone'])), parse_utc(data['end_at']).astimezone(clinic_zone(config['timezone']))))
+        slots = available_slots(request.args.get('date'), int(request.args.get('duration', 30)), config['timezone'],
+            config['schedules'].get(practitioner_id, DEFAULT_SCHEDULE), booked)
+        return jsonify({'slots': slots, 'timezone': config['timezone']})
+    except (SchedulingError, ValueError): return jsonify({'error': 'Invalid date or duration'}), 400
 
 # =================== Login ===================
 @app.route('/login', methods=['GET', 'POST'])
@@ -1983,6 +2047,33 @@ def settings():
         flash("Please log in first.")
         return redirect(url_for('login'))
 
+    owner_id, _ = booking_identity()
+    if request.method == 'POST' and request.form.get('settings_action') == 'schedule':
+        if not valid_booking_csrf(): return ('Invalid or expired form token.', 400)
+        if session.get('role') not in ('admin', 'super_admin'):
+            return ('Access denied.', 403)
+        timezone_name = request.form.get('clinic_timezone', '').strip()
+        practitioner_id = request.form.get('practitioner_id', '').strip()
+        if practitioner_id not in {item['id'] for item in practitioner_options(owner_id)}:
+            flash('Select a valid practitioner.'); return redirect(url_for('settings'))
+        try: clinic_zone(timezone_name)
+        except SchedulingError as exc:
+            flash(str(exc)); return redirect(url_for('settings'))
+        schedules = booking_config(owner_id)['schedules']
+        practitioner_schedule = {}
+        for day in range(7):
+            start = request.form.get(f'day_{day}_start', '').strip(); end = request.form.get(f'day_{day}_end', '').strip()
+            if start and end:
+                if start >= end: flash('Availability start must be before end.'); return redirect(url_for('settings'))
+                practitioner_schedule[str(day)] = [{'start': start, 'end': end}]
+            else: practitioner_schedule[str(day)] = []
+        schedules[practitioner_id] = practitioner_schedule
+        db.collection('clinic_settings').document(owner_id).set({
+            'timezone': timezone_name, 'schedules': schedules,
+            'reminders_enabled': request.form.get('reminders_enabled') == 'on',
+            'updated_at': datetime.now(timezone.utc).isoformat()}, merge=True)
+        flash('Clinic scheduling settings updated.'); return redirect(url_for('settings'))
+
     if request.method == 'POST':
         uid = session['user']
         new_email = normalize_gmail_email(request.form.get('new_email'))
@@ -2002,7 +2093,13 @@ def settings():
         except Exception as e:
             flash(f"❌ Error: {str(e)}")
 
-    return render_template('settings.html')
+    config = booking_config(owner_id)
+    return render_template('settings.html', booking_config=config,
+                           practitioners=practitioner_options(owner_id),
+                           default_schedule=DEFAULT_SCHEDULE,
+                           configured_schedules=config['schedules'],
+                           csrf_token=booking_csrf_token(),
+                           can_manage_schedule=session.get('role') in ('admin', 'super_admin'))
 
 # import medicine
 

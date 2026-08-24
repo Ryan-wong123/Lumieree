@@ -11,6 +11,42 @@
   <button class="btn btn-success mb-3">{{ t('update_account') }}</button>
 </form>
 
+{% if can_manage_schedule %}
+<hr class="my-4">
+<h4>Clinic scheduling</h4>
+<p class="text-muted">Set the clinic timezone and weekly availability for one practitioner at a time. Saving a practitioner preserves other practitioners' schedules.</p>
+<form method="POST">
+  <input type="hidden" name="settings_action" value="schedule">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="row g-3 mb-3">
+    <div class="col-md-6"><label class="form-label">Clinic timezone (IANA)</label><input class="form-control" name="clinic_timezone" value="{{ booking_config.timezone }}" required></div>
+    <div class="col-md-6"><label class="form-label">Practitioner</label><select class="form-select" name="practitioner_id" id="schedulePractitioner" required>{% for practitioner in practitioners %}<option value="{{ practitioner.id }}">{{ practitioner.name }}</option>{% endfor %}</select></div>
+  </div>
+  <table class="table table-sm"><thead><tr><th>Day</th><th>Available from</th><th>Available until</th></tr></thead><tbody>
+  {% for day in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+    {% set periods = default_schedule.get(loop.index0|string, []) %}<tr><td>{{ day }}</td><td><input type="time" class="form-control" name="day_{{ loop.index0 }}_start" value="{{ periods[0].start if periods else '' }}"></td><td><input type="time" class="form-control" name="day_{{ loop.index0 }}_end" value="{{ periods[0].end if periods else '' }}"></td></tr>
+  {% endfor %}
+  </tbody></table>
+  <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="reminders_enabled" id="remindersEnabled" {% if booking_config.reminders_enabled %}checked{% endif %}><label class="form-check-label" for="remindersEnabled">Enable reminder delivery only for patients who consent</label></div>
+  <button class="btn btn-success">Save scheduling settings</button>
+</form>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const configured = {{ configured_schedules|tojson }}, defaults = {{ default_schedule|tojson }};
+  const select = document.getElementById('schedulePractitioner');
+  function showSchedule() {
+    const schedule = configured[select.value] || defaults;
+    for (let day = 0; day < 7; day++) {
+      const period = (schedule[String(day)] || [])[0] || {};
+      document.querySelector(`[name="day_${day}_start"]`).value = period.start || '';
+      document.querySelector(`[name="day_${day}_end"]`).value = period.end || '';
+    }
+  }
+  select.addEventListener('change', showSchedule); showSchedule();
+});
+</script>
+{% endif %}
+
 <!-- Logout Button -->
 <a href="{{ url_for('logout') }}" class="btn btn-danger">
   {{ t('logout') }}
