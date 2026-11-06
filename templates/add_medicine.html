@@ -14,6 +14,7 @@ input[type="date"]::-webkit-datetime-edit {
 </style>
 
 <form method="POST">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <label class="form-label">{{ t('medicine_name') }}</label>
   <input name="name" class="form-control mb-2" required>
@@ -36,10 +37,13 @@ input[type="date"]::-webkit-datetime-edit {
   <label class="form-label">{{ t('type') }}</label>
   <select name="type" class="form-control mb-3" required>
     <option value="" disabled selected>-- {{ t('select_type') }} --</option>
-    <option value="{{ t('pills') }}">{{ t('pills') }}</option>
-    <option value="{{ t('grams') }}">{{ t('grams') }}</option>
-    <option value="{{ t('bottle') }}">{{ t('bottle') }}</option>
+    <option value="pills">{{ t('pills') }}</option>
+    <option value="grams">{{ t('grams') }}</option>
+    <option value="bottle">{{ t('bottle') }}</option>
   </select>
+
+  <label class="form-label">{{ t('barcode') }}</label>
+  <input name="barcode" class="form-control mb-3" maxlength="64" autocomplete="off">
 
   <button class="btn btn-primary">{{ t('add_medicine') }}</button>
 </form>

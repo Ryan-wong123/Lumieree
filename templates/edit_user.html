@@ -4,23 +4,23 @@
 <h3>{{ t('edit_user') }}</h3>
 
 <div class="mb-3">
-  <div><strong>UID:</strong> {{ u.uid }}</div>
+  <div><strong>{{ t('username') }}:</strong> {{ u.username }}</div>
   <div><strong>{{ t('email') }}:</strong> {{ u.email or "N/A" }}</div>
 </div>
 
 <form method="POST" style="max-width:520px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="mb-3">
     <label class="form-label">{{ t('role') }}</label>
     <select class="form-select" name="role">
-      <option value="{{ t('staff') }}" {% if u.role == "{{ t('staff') }}" %}selected{% endif %}>{{ t('staff') }}</option>
-      <option value="{{ t('admin') }}" {% if u.role == "{{ t('admin') }}" %}selected{% endif %}>{{ t('admin') }}</option>
-      <option value="{{ t('super_admin') }}" {% if u.role == "{{ t('super_admin') }}" %}selected{% endif %}>{{ t('super_admin') }}</option>
+      {% for code in ['staff', 'admin', 'super_admin'] %}
+      <option value="{{ code }}" {% if u.role == code %}selected{% endif %}>{{ t(code) }}</option>
+      {% endfor %}
     </select>
   </div>
 
   <div class="form-check mb-3">
-    <input class="form-check-input" type="checkbox" name="active" id="active"
-           {% if u.active %}checked{% endif %}>
+    <input class="form-check-input" type="checkbox" name="active" id="active" {% if u.active %}checked{% endif %}>
     <label class="form-check-label" for="active">{{ t('active') }}</label>
   </div>
 
@@ -28,16 +28,17 @@
 
   <div class="mb-3">
     <label class="form-label">{{ t('change_email') }}</label>
-    <input class="form-control" name="new_email" placeholder="name or name@gmail.com">
+    <input class="form-control" name="new_email" type="email" autocomplete="off">
   </div>
 
   <div class="mb-3">
     <label class="form-label">{{ t('change_password') }}</label>
-    <input class="form-control" name="new_password" type="password" placeholder="New password">
+    <input class="form-control" name="new_password" type="password" autocomplete="new-password" minlength="12">
+    <div class="form-text">{{ t('password_hint') }}</div>
   </div>
 
   <button class="btn btn-success">{{ t('save_changes') }}</button>
-  <a class="btn btn-secondary" href="{{ url_for('admin_users') }}">{{ t('back') }}</a>
+  <a class="btn btn-secondary" href="{{ url_for('admin.users') }}">{{ t('back') }}</a>
 </form>
 
 {% endblock %}

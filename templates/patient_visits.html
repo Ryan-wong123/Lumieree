@@ -30,6 +30,7 @@
     <h5 class="card-title">{{ t('add_new_visit') }}</h5>
 
     <form method="POST" class="row g-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="col-md-4">
         <input type="date" name="date" class="form-control"
                value="{{ draft.date if draft else now().strftime('%Y-%m-%d') }}">

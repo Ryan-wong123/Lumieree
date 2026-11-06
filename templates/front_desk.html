@@ -30,7 +30,10 @@
           </li>
           {% endfor %}
         </ul>
-        <a href="/front_desk/update/{{ item.id }}/completed" class="btn btn-success btn-sm">{{ t('mark_completed') }}</a>
+        <form method="POST" action="{{ url_for('front_desk.update_status', queue_id=item.id, status='completed') }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-success btn-sm">{{ t('mark_completed') }}</button>
+        </form>
       </div>
     </div>
     {% else %}
@@ -55,7 +58,11 @@
           </li>
           {% endfor %}
         </ul>
-        <a href="/front_desk/update/{{ item.id }}/void" class="btn btn-danger btn-sm">{{ t('void') }}</a>
+        <form method="POST" action="{{ url_for('front_desk.update_status', queue_id=item.id, status='void') }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger btn-sm">{{ t('void') }}</button>
+        </form>
+        <a href="{{ url_for('receipts.queue_receipt', queue_id=item.id) }}" class="btn btn-outline-secondary btn-sm">{{ t('receipt') }}</a>
       </div>
     </div>
     {% else %}

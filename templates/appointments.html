@@ -22,6 +22,7 @@
 
 <!-- Appointment Table -->
 <form method="POST" action="/appointments/save" id="appointmentForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="date" id="selectedDate" value="{{ selected_date }}">
 
   <table class="table table-bordered table-sm text-center align-middle mt-3" id="appointmentTable">
@@ -61,7 +62,7 @@
           </td>
           {% endfor %}
           <td>
-            <button type="button" class="btn btn-sm btn-danger" onclick="cancelAppointment(this, '{{ patient.name }}')">✖</button>
+            <button type="button" class="btn btn-sm btn-danger cancel-appointment" data-name="{{ patient.name }}">✖</button>
           </td>
         </tr>
         {% endfor %}
@@ -108,11 +109,11 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    const initial = "{{ selected_date }}";
+    const initial = {{ selected_date|tojson }};
 
     calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
       initialView: 'dayGridMonth',
-      locale: "{{ g.lang }}",
+      locale: {{ g.lang|tojson }},
       height: 600,
       customButtons: {
         myToday: {
@@ -145,51 +146,63 @@
   // Start at 2 if we rendered a blank row; else patients.length + 1
   let rowCount = {{ (patients|length if (patients|length > 0) else 1) }} + 1;
 
-  function addRow() {
-    const tbody = document.getElementById('appointmentBody');
-    let rowHTML = `<tr>
-      <td><input type="text" class="form-control" name="patient_name_${rowCount}"></td>
-      <td><input type="text" class="form-control" name="contact_${rowCount}"></td>`;
+  // Rows are built with DOM APIs (never string-concatenated HTML) so names/contacts
+  // returned by the server can never inject markup or script.
+  function makeCell(name, value) {
+    const td = document.createElement('td');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-control';
+    input.name = name;
+    if (value) input.value = value;
+    td.appendChild(input);
+    return td;
+  }
+
+  function makeRow(index, entry) {
+    const tr = document.createElement('tr');
+    tr.appendChild(makeCell(`patient_name_${index}`, entry && entry.name));
+    tr.appendChild(makeCell(`contact_${index}`, entry && entry.contact));
     for (let hour = 10; hour < 21; hour++) {
-      rowHTML += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}"></td>`;
+      const value = entry && entry.slots ? entry.slots[String(hour)] : '';
+      tr.appendChild(makeCell(`slot_${index}_${hour}`, value));
     }
-    rowHTML += `<td></td></tr>`;
-    tbody.insertAdjacentHTML('beforeend', rowHTML);
+    const actions = document.createElement('td');
+    if (entry && entry.name) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-sm btn-danger cancel-appointment';
+      button.dataset.name = entry.name;
+      button.textContent = '✖';
+      actions.appendChild(button);
+    }
+    tr.appendChild(actions);
+    return tr;
+  }
+
+  function addRow() {
+    document.getElementById('appointmentBody').appendChild(makeRow(rowCount, null));
     rowCount++;
   }
 
   function updateTable(data) {
     const tbody = document.getElementById('appointmentBody');
-    tbody.innerHTML = '';
+    tbody.replaceChildren();
     rowCount = 1;
-
-    if (!data.patients || data.patients.length === 0) {
-      let emptyRow = `<tr>
-        <td><input type="text" class="form-control" name="patient_name_${rowCount}"></td>
-        <td><input type="text" class="form-control" name="contact_${rowCount}"></td>`;
-      for (let hour = 10; hour < 21; hour++) {
-        emptyRow += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}"></td>`;
-      }
-      emptyRow += `<td></td></tr>`;
-      tbody.insertAdjacentHTML('beforeend', emptyRow);
-      rowCount = 2;
+    const entries = (data && data.patients) || [];
+    if (entries.length === 0) {
+      tbody.appendChild(makeRow(rowCount++, null));
       return;
     }
-
-    for (const entry of data.patients) {
-      let row = `<tr>
-        <td><input type="text" class="form-control" name="patient_name_${rowCount}" value="${entry.name || ''}"></td>
-        <td><input type="text" class="form-control" name="contact_${rowCount}" value="${entry.contact || ''}"></td>`;
-      for (let hour = 10; hour < 21; hour++) {
-        const value = (entry.slots && entry.slots[String(hour)]) || '';
-        row += `<td><input type="text" class="form-control" name="slot_${rowCount}_${hour}" value="${value}"></td>`;
-      }
-      row += `<td><button type="button" class="btn btn-sm btn-danger" onclick="cancelAppointment(this, '${entry.name || ''}')">✖</button></td>`;
-      row += `</tr>`;
-      tbody.insertAdjacentHTML('beforeend', row);
-      rowCount++;
+    for (const entry of entries) {
+      tbody.appendChild(makeRow(rowCount++, entry));
     }
   }
+
+  document.getElementById('appointmentBody').addEventListener('click', function (event) {
+    const button = event.target.closest('.cancel-appointment');
+    if (button) cancelAppointment(button, button.dataset.name);
+  });
 
   function cancelAppointment(button, patientName) {
     const date = document.getElementById("selectedDate").value;
@@ -198,7 +211,10 @@
 
     fetch('/appointments/delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+      },
       body: `patient_name=${encodeURIComponent(patientName)}&date=${encodeURIComponent(date)}`
     }).then(res => {
       if (res.status === 204) {

@@ -1,0 +1,3 @@
+# Only needed to run scripts/migrate_firestore_to_postgres.py (one-off data migration from Firebase)
+-r requirements.txt
+firebase-admin>=6.5
