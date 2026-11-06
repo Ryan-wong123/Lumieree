@@ -1,0 +1,49 @@
+# Applied by the deploy procedure BEFORE rolling out new web pods:
+#   kubectl -n lumieree delete job lumieree-migrate --ignore-not-found
+#   kubectl apply -f migrate-job.yaml   (with the same image tag as the Deployment)
+#   kubectl -n lumieree wait --for=condition=complete job/lumieree-migrate --timeout=300s
+# It applies Alembic migrations and creates the first super admin if none exists (idempotent).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lumieree-migrate
+  namespace: lumieree
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: lumieree
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: ghcr.io/ryan-wong123/lumieree:latest   # keep in sync with the Deployment tag
+          command: ["sh", "-c", "flask db upgrade && flask ensure-super-admin"]
+          envFrom:
+            - configMapRef:
+                name: lumieree-config
+            - secretRef:
+                name: lumieree-secrets
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
