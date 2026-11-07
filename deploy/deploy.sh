@@ -19,7 +19,7 @@ export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 NS="${DEPLOY_NAMESPACE:-lumieree}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/site.env"   # SITE_HOST: the one place the public hostname is defined
-HOST="${DEPLOY_HOST:-${SITE_HOST%$''}}"
+HOST="${DEPLOY_HOST:-${SITE_HOST%$'\r'}}"
 [[ "$HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || { echo "refusing to deploy: '$HOST' is not a valid hostname" >&2; exit 2; }
 IMAGE="${DEPLOY_IMAGE:-ghcr.io/ryan-wong123/lumieree}"
 
