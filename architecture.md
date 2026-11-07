@@ -337,6 +337,7 @@ history).
 | Two-factor optional per account, not enforced | Avoids locking out existing users; a super admin can reset it. Enforcement for admins is a roadmap item |
 | Audit log in PostgreSQL, append-only by convention, `SET NULL` foreign keys | Survives user deletion without a separate service; the attempted name of an unknown user is never stored |
 | CSP nonces instead of extracting all inline scripts | Smallest change that removes `'unsafe-inline'` from `script-src`; inline handlers replaced by `data-*` attributes |
+| Overlay `images:` entries match the full image name, not `lumieree` | The base already renames `lumieree` to `ghcr.io/ryan-wong123/lumieree:latest`; an overlay entry still matching `lumieree` finds nothing and silently keeps `:latest`. The runbook now checks the running image after a deploy |
 | Trivy exception KSV-0014 for the in-cluster PostgreSQL StatefulSet | A read-only root filesystem needs extra `emptyDir` mounts for the socket directory and `/tmp`; changing the live database pod without a tested manifest was judged riskier than the finding. Scoped to that one file in `.trivyignore.yaml` and tracked in PRD §10 |
 | Session Manager instead of SSH, port 22 closed | Removes the internet-reachable admin port and the moving-IP allow-list; access is controlled by IAM and logged by CloudTrail |
 | GuardDuty not enabled | Requires a paid AWS account plan (the Free plan returns `SubscriptionRequiredException`); revisit after upgrading |
@@ -345,6 +346,7 @@ history).
 
 | Date | Change |
 | --- | --- |
+| 2026-11-08 | Fixed the `images:` override in `overlays/production` and `overlays/aws-k3s` (it matched `lumieree`, which the base had already renamed, so the pinned tag was ignored and pods ran `:latest`); runbook verifies the running image |
 | 2026-11-08 | Security hardening: optional TOTP two-factor (`/login/mfa`, `/settings/mfa/*`, users columns), `audit_log` table + `/admin/audit`, per-patient export (`/patients/<id>/export.json`), CSP nonce without `'unsafe-inline'` scripts, SRI on CDN assets (dead FullCalendar CSS/locales URLs fixed), Trivy + Dependabot + pinned Actions/base images in CI (Trivy found and the Dockerfile now fixes fixable `zlib1g` and pip-tooling findings in the image), manual ZAP baseline workflow, `segno` dependency, migration `0002_mfa_audit`; AWS: k3s secrets encryption, Session Manager with port 22 closed, daily EBS snapshots, CloudTrail, uptime alarm |
 | 2026-11-07 | S3 backup job waits for PostgreSQL (`pg_isready` loop) before `pg_dump`: k3s programs NetworkPolicy allow rules a few seconds after pod start, so the first connection was refused; runbook marked as executed end to end with tested notes (Free-plan instance type, full-SHA image tag) |
 | 2026-11-07 | CI image job lower-cases the GitHub owner in the GHCR image name (mixed-case owners made the build fail) |
