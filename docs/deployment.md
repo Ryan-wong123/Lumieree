@@ -540,6 +540,11 @@ aws iam put-role-policy --role-name lumieree-github-deploy --policy-name deploy-
    {"Effect":"Allow","Action":["ssm:GetCommandInvocation","ssm:ListCommandInvocations"],"Resource":"*"}]}'
 ```
 
+To change the document later, edit `deploy/ssm-document.json`, then `aws ssm update-document --name lumieree-deploy --document-version '$LATEST'
+--content file://deploy/ssm-document.json` and make the new version the default with `aws ssm update-document-default-version`
+(the document lives in AWS, so a merge does not update it by itself). *Tested note:* SSM runs the document's lines with `sh`
+(dash on Ubuntu), so it uses `set -eu`; `set -o pipefail` there made the first deploy attempt fail before touching the cluster.
+
 The workflow hard-codes the role ARN, region and instance id (`deploy` job `env`); update them if the instance or
 account changes. The instance needs the Session Manager agent online (§16.2) and a git checkout at `~/lumieree`.
 

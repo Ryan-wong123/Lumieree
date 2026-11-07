@@ -42,6 +42,8 @@ def test_ssm_document_accepts_only_a_git_sha():
     commands = " ".join(DOC["mainSteps"][0]["inputs"]["runCommand"])
     assert commands.count("{{ tag }}") == 2  # checkout target and script argument: nothing else is templated
     assert "deploy/deploy.sh" in commands
+    # SSM runs these lines with the system sh (dash on Ubuntu), which has no `set -o pipefail`; bash runs the script.
+    assert "pipefail" not in commands and "set -eu" in commands
 
 
 def test_ci_deploy_job_is_gated_keyless_and_serialised():
