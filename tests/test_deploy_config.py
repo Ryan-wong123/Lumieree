@@ -103,3 +103,10 @@ def test_postgres_pod_is_read_only_and_the_alert_job_is_wired_in():
     assert 'schedule: "*/5 * * * *"' in job and "ALERT_THRESHOLD" in job and "auth.login_failed" in job
     assert "component: alert" in job and "readOnlyRootFilesystem: true" in job
     assert not (ROOT / ".trivyignore.yaml").exists()  # the read-only exception is gone, nothing replaced it
+
+
+def test_shell_files_contain_no_carriage_returns():
+    """A stray CR in a script or in site.env breaks it on the Linux server (and makes Git treat the file as binary)."""
+    for path in (ROOT / "deploy").iterdir():
+        if path.suffix in {".sh", ".env"}:
+            assert b"\r" not in path.read_bytes(), f"{path.name} contains a carriage return"
