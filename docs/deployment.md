@@ -343,8 +343,11 @@ securely, delete the file, and stop the port-forward. Users must choose a new pa
 
 ## 13. Day-2 operations
 
-**Release a new version** – merge to `main`, wait for CI to publish `:<sha>`, then repeat §10 with the new `TAG`
-(migrate Job first, then `kubectl apply -k`, then `rollout status`).
+**Release a new version** – merge a pull request to `main`. That is all: CI tests and scans it, builds `:<sha>`, and
+the `deploy` job releases it automatically (§17). Watch it in the Actions tab (the job summary shows the server output);
+the site is smoke-tested and rolled back on failure. The manual procedure in §10 (migrate Job first, then
+`kubectl apply -k`, then `rollout status`) stays available as a fallback, for example if GitHub or the AWS role is
+unavailable.
 
 **Roll back the app** – `kubectl -n lumieree rollout undo deploy/lumieree-web`. Migrations are expand/contract, so
 the previous image keeps working with the new schema for one release; run `flask db downgrade` only after a backup.
@@ -414,6 +417,7 @@ Delete the DuckDNS domain on duckdns.org if you no longer need it.
 - [x] Port 22 closed and admin access through Session Manager (§16.2); port 6443 closed
 - [x] Kubernetes Secrets encrypted at rest (§16.1), daily EBS snapshots (§16.3), CloudTrail (§16.4), uptime alarm (§16.5)
 - [ ] Two-factor turned on for every `admin` / `super_admin` account (Settings → Two-factor authentication)
+- [x] Automatic deployment with smoke test and rollback (§17); [ ] branch protection on `main` enabled (§17)
 - [ ] `SECRET_KEY` random (≥ 32 chars), bootstrap password long and changed after first login
 - [ ] HTTPS works and HTTP redirects; `SESSION_COOKIE_SECURE=true` (already in the ConfigMap)
 - [ ] Backups verified by a real restore; bucket private, versioned, encrypted, TLS-only
@@ -501,6 +505,62 @@ in the application: **Audit Log** page, filter `auth.login_failed`.
 
 **Teardown additions** (§14): delete the DLM policy and its snapshots, the CloudTrail trail and bucket, the health check,
 alarm and SNS topic, and detach `AmazonSSMManagedInstanceCore` before deleting the role.
+
+---
+
+## 17. Continuous deployment (set up on 2026-11-08)
+
+**What happens on every merge to `main`:** CI (`test`, `trivy-fs`, `image`) → `deploy` job → AWS role via GitHub OIDC → SSM
+document `lumieree-deploy` with the commit SHA → on the server `deploy/deploy.sh`: check the image exists in GHCR,
+run the migration Job, `kubectl apply -k` with the SHA as tag, verify the Deployment runs that image, smoke-test
+`/readyz` and `/healthz` through the ingress, **roll back** (`kubectl rollout undo`) if anything after the migration fails →
+the runner smoke-tests the public site (readiness, health, HTTP→HTTPS, nonce CSP). A failed migration stops the release
+before any pod changes. The deploy job fails (red) whenever a release did not succeed or was rolled back.
+
+**One-time AWS setup** (done from CloudShell; `$A` = account id, `$I` = instance id, `$R` = region):
+
+```bash
+# 1. The SSM document (source: deploy/ssm-document.json). Update later with: aws ssm update-document --document-version '$LATEST' ...
+aws ssm create-document --name lumieree-deploy --document-type Command --document-format JSON --content file://deploy/ssm-document.json
+
+# 2. GitHub's OIDC identity provider (once per account; it may already exist)
+aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+
+# 3. Role trusted only by the main branch of this repository, allowed to run only that document on only this instance
+aws iam create-role --role-name lumieree-github-deploy --assume-role-policy-document '{
+  "Version":"2012-10-17","Statement":[{"Effect":"Allow",
+   "Principal":{"Federated":"arn:aws:iam::'$A':oidc-provider/token.actions.githubusercontent.com"},
+   "Action":"sts:AssumeRoleWithWebIdentity",
+   "Condition":{"StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com",
+     "token.actions.githubusercontent.com:sub":"repo:Ryan-wong123/Lumieree:ref:refs/heads/main"}}}]}'
+aws iam put-role-policy --role-name lumieree-github-deploy --policy-name deploy-via-ssm --policy-document '{
+  "Version":"2012-10-17","Statement":[
+   {"Effect":"Allow","Action":"ssm:SendCommand","Resource":["arn:aws:ssm:'$R':'$A':document/lumieree-deploy","arn:aws:ec2:'$R':'$A':instance/'$I'"]},
+   {"Effect":"Allow","Action":["ssm:GetCommandInvocation","ssm:ListCommandInvocations"],"Resource":"*"}]}'
+```
+
+The workflow hard-codes the role ARN, region and instance id (`deploy` job `env`); update them if the instance or
+account changes. The instance needs the Session Manager agent online (§16.2) and a git checkout at `~/lumieree`.
+
+**Branch protection (GitHub → Settings → Branches → rule for `main`)** is what makes the pipeline safe: require a pull
+request, require the status checks `test`, `docs-in-sync`, `trivy-fs` and `image`, and block force pushes and
+deletion. Without it anyone with write access could push straight to `main` and deploy.
+
+**Operating it**
+- *Re-run or redeploy a commit:* Actions → CI → the run for that commit → Re-run failed jobs (or push a new commit).
+- *Pause automatic deployment:* disable the `lumieree-github-deploy` role session by detaching its policy
+  (`aws iam delete-role-policy --role-name lumieree-github-deploy --policy-name deploy-via-ssm`) or remove the `deploy` job;
+  merges keep building images but nothing is deployed.
+- *Roll back manually:* `kubectl -n lumieree rollout undo deploy/lumieree-web` (via Session Manager), or revert the commit
+  on `main` and let the pipeline deploy the revert.
+- *Replace the instance:* update `INSTANCE_ID` in `ci.yml` and the resource ARN in the role policy.
+- *Troubleshooting:* the failing step's output is in the job log and summary. "image ... is not available in the
+  registry" means the `image` job did not publish that SHA; `AccessDenied` on `AssumeRoleWithWebIdentity` means the
+  workflow ran from a branch other than `main` or the repository name in the trust policy does not match.
+
+**Teardown additions** (§14): delete the role `lumieree-github-deploy` (and its inline policy) and the SSM document
+`lumieree-deploy`; leave the OIDC provider if another project uses it.
 
 ---
 

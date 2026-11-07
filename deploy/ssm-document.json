@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "2.2",
+  "description": "Deploy one Lumieree commit to the k3s cluster: fetch that commit and run deploy/deploy.sh from it. The only input is a 40-character git SHA, so the CI role cannot run arbitrary commands through this document.",
+  "parameters": {
+    "tag": {
+      "type": "String",
+      "description": "Full 40-character git commit SHA to deploy (also the container image tag).",
+      "allowedPattern": "^[0-9a-f]{40}$"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "deploy",
+      "inputs": {
+        "timeoutSeconds": "1200",
+        "runCommand": [
+          "set -euo pipefail",
+          "runuser -l ubuntu -c 'cd ~/lumieree && git fetch -q origin && git checkout -q -f {{ tag }} && bash deploy/deploy.sh {{ tag }}' 2>&1"
+        ]
+      }
+    }
+  ]
+}
