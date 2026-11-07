@@ -4,7 +4,7 @@
 > user-visible behaviour, roles, permissions, or data handling must update this file in the same change set
 > (see `AGENTS.md`). Technical design lives in [`architecture.md`](architecture.md).
 
-Status: Implemented = in the code today · Planned = not built yet · Last reviewed: 2026-11-06
+Status: Implemented = in the code today · Planned = not built yet · Last reviewed: 2026-11-07
 
 ## 1. Overview
 
@@ -157,6 +157,9 @@ Imported users receive random temporary passwords and must change them at first 
 * Single container image published by CI; configuration only through environment variables and Secrets.
 * Database changes only through Alembic migrations, applied by a Job before rollout; backward-compatible for one release.
 * First super admin created by a bootstrap step, never through the public UI.
+* Reference production target: a single AWS EC2 instance running k3s, a DuckDNS sub-domain with a Let's Encrypt
+  certificate, and nightly database backups to a private encrypted S3 bucket (runbook: `docs/deployment.md`).
+  High availability (EKS + RDS, custom domain) is a later step.
 * Public deployment needs: a hostname with a TLS certificate, a managed PostgreSQL (or the in-cluster overlay with
   off-cluster backup copies), a `SECRET_KEY`, and the bootstrap admin credentials (see `docs/deployment.md`).
 
@@ -208,4 +211,5 @@ Imported users receive random temporary passwords and must change them at first 
 
 | Date | Change |
 | --- | --- |
+| 2026-11-07 | §6: documented the AWS reference deployment (EC2 + k3s + S3 backups + DuckDNS) |
 | 2026-11-06 | Initial PRD written from the codebase after the PostgreSQL / Kubernetes migration. Documents roles, journeys, requirements AUTH-1…DASH-2, NFRs and roadmap |

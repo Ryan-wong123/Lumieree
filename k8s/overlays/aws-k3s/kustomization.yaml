@@ -1,0 +1,55 @@
+# Single EC2 instance running k3s (Kubernetes): app + PostgreSQL StatefulSet + Redis, with nightly
+# pg_dump backups uploaded to S3 through the instance's IAM role. See docs/deployment.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: lumieree
+resources:
+  - ../in-cluster-postgres      # base + PostgreSQL StatefulSet (+ its local-PVC backup, removed below)
+  - s3-backup.yaml
+  - networkpolicy-extra.yaml
+images:
+  - name: lumieree
+    newName: ghcr.io/ryan-wong123/lumieree
+    newTag: latest          # replace with an immutable tag (git SHA) on every release
+patches:
+  # Backups go to S3 instead of a local PVC.
+  - patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: postgres-backup
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: postgres-backups
+  # Public hostname (your DuckDNS name).
+  - target:
+      kind: Ingress
+      name: lumieree
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: CHANGE-ME.duckdns.org
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: CHANGE-ME.duckdns.org
+  # One node: keep two web replicas for rolling updates, but cap autoscaling.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: lumieree-web
+    patch: |-
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+  # Allows pulling a private GHCR image when the `ghcr-pull` Secret exists (harmless otherwise).
+  - target:
+      kind: ServiceAccount
+      name: lumieree
+    patch: |-
+      - op: add
+        path: /imagePullSecrets
+        value:
+          - name: ghcr-pull

@@ -4,7 +4,7 @@
 > configuration, dependencies, or deployment must update this file in the same change set (see `AGENTS.md`).
 > `tests/test_docs.py` fails if a route, table, or environment variable is missing from the sections below.
 
-Last reviewed: 2026-11-06 · Product requirements: [`PRD.md`](PRD.md)
+Last reviewed: 2026-11-07 · Product requirements: [`PRD.md`](PRD.md)
 
 ## 1. System context
 
@@ -68,7 +68,7 @@ lumieree/
 templates/                   Jinja2 pages (layout.html + one template per page, error.html)
 migrations/                  Alembic environment and versions/
 tests/                       pytest suite (auth, authorization, tenant isolation, features, legacy import, docs)
-k8s/base, k8s/overlays/      Kubernetes manifests (see section 9)
+k8s/base, k8s/overlays/, k8s/addons/  Kubernetes manifests: base, overlays (production, in-cluster-postgres, aws-k3s), cert-manager issuers (section 9)
 scripts/check_docs_updated.py  Docs-sync gate used by CI, git hook and the Claude Code Stop hook
 .github/workflows/ci.yml     Lint, tests (PostgreSQL), migration round-trip, docs gate, image build
 Dockerfile, docker-compose.yml, .dockerignore
@@ -239,9 +239,16 @@ flowchart TB
   super admin from `BOOTSTRAP_ADMIN_*`), then the web service on `localhost:8080`.
 * **Kubernetes** (`k8s/`): `base/` (namespace, ServiceAccount without token, ConfigMap, Deployment, Service,
   Ingress, HPA, PDB, NetworkPolicies default-deny + allow-lists, Redis, `secret.example.yaml`, `migrate-job.yaml`),
-  `overlays/production` (managed database; host, image tag and replicas patched) and `overlays/in-cluster-postgres`
-  (adds a PostgreSQL StatefulSet + nightly `pg_dump` CronJob). Manifests are validated against the Kubernetes 1.31
-  schema.
+  `overlays/production` (managed database; host, image tag and replicas patched), `overlays/in-cluster-postgres`
+  (adds a PostgreSQL StatefulSet + nightly `pg_dump` CronJob to a PVC) and `overlays/aws-k3s` (see below), plus
+  `addons/cluster-issuer.yaml` (Let's Encrypt ClusterIssuers for cert-manager). Manifests are validated against the
+  Kubernetes 1.31 schema; `kustomize build` has not been run in CI.
+* **AWS reference deployment** (`overlays/aws-k3s`, runbook in `docs/deployment.md`): one EC2 `t3.medium` with an
+  Elastic IP running **k3s**, ingress-nginx (`externalTrafficPolicy=Local` to keep client IPs) and cert-manager
+  (Let's Encrypt HTTP-01), DNS via a **DuckDNS** A record to the Elastic IP, PostgreSQL as a StatefulSet on the encrypted
+  EBS root volume, and a nightly CronJob (`postgres-backup-s3`) that uploads `pg_dump` files to a private, versioned,
+  encrypted **S3** bucket using the instance's IAM role (IMDSv2, hop limit 2; only the backup pod may reach the metadata
+  service). Extra NetworkPolicies allow the cert-manager solver and the backup pod. Single node = no high availability.
 * **Migrations** run as a separate Job **before** a rollout (never at web start-up) so replicas cannot race.
   Rolling updates use `maxUnavailable: 0`; schema changes must therefore be backward compatible for one release
   (expand → deploy → contract).
@@ -285,9 +292,12 @@ history).
 | Removed the unreachable `/prescriptions/create` and `/receipt/<prescription_id>` routes | Template never existed; flow replaced by visits → front desk queue |
 | Migrations as a Job, not at start-up | Avoid races between replicas |
 | Redis only for rate limiting | Required for correct limits across replicas; holds no patient data |
+| AWS reference deployment = EC2 + k3s + S3 + DuckDNS (not EKS/RDS) | Cheapest way to run real Kubernetes for one clinic; S3 gives durable off-instance backups; EKS + RDS remain the upgrade path for HA |
+| Backups via IAM instance role, not stored AWS keys | No long-lived credentials in the cluster; NetworkPolicy limits metadata-service access to the backup pod |
 
 ## 14. Change log
 
 | Date | Change |
 | --- | --- |
+| 2026-11-07 | Added the AWS reference deployment: `k8s/overlays/aws-k3s` (S3 backup CronJob, extra NetworkPolicies), `k8s/addons/cluster-issuer.yaml`, and a full EC2 + k3s + S3 + DuckDNS runbook in `docs/deployment.md` |
 | 2026-11-06 | Migrated from Firebase to PostgreSQL; restructured into an application factory with blueprints; added CSRF, RBAC, rate limiting, security headers, tests, Docker, Kubernetes manifests, CI, and the docs-sync tooling |

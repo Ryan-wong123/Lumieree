@@ -39,7 +39,7 @@ TEST_DATABASE_URL=postgresql+psycopg://user:pw@localhost/lumieree_test pytest   
 | --- | --- |
 | [`PRD.md`](PRD.md) | Product requirements: users, journeys, requirements, roadmap |
 | [`architecture.md`](architecture.md) | System design, data model, security, configuration, deployment |
-| [`docs/deployment.md`](docs/deployment.md) | Runbook: Docker, Kubernetes, migration from Firebase, backups |
+| [`docs/deployment.md`](docs/deployment.md) | Runbook: AWS (EC2 + k3s + S3 backups) with a DuckDNS domain, Firebase import, backups, teardown |
 | [`AGENTS.md`](AGENTS.md) | Rules for AI agents and contributors, including the mandatory docs-sync protocol |
 
 `PRD.md` and `architecture.md` are kept in sync with the code automatically (tests, a pre-commit/CI check, and a
