@@ -21,6 +21,8 @@ OPEN_ENDPOINTS = {"auth.login", "auth.login_mfa", "i18n.switch_language", "healt
 
 # After the password step, the second factor must be supplied within this time and in at most this many tries.
 MFA_PENDING_SECONDS = 300
+# While two-factor is required but not yet set up, these are the only pages an administrator can reach.
+MFA_SETUP_ENDPOINTS = {"auth.settings", "auth.mfa_start", "auth.mfa_enable", "auth.logout"}
 MFA_MAX_ATTEMPTS = 5
 
 USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,62}$")
@@ -64,6 +66,11 @@ def validate_password(password: str, username: str = "") -> None:
         raise ValidationError("Password is too long.")
     if username and password.lower() == username.lower():
         raise ValidationError("Password must not be the same as the username.")
+
+
+def mfa_enforced_for(user: User) -> bool:
+    """True when two-factor is mandatory for this account (administrators, if the setting is on)."""
+    return bool(current_app.config.get("REQUIRE_MFA_FOR_ADMINS")) and user.is_admin
 
 
 def create_user(username, password, role="staff", email=None, created_by=None, must_change_password=False) -> User:
@@ -118,6 +125,9 @@ def init_app(app):
             return redirect(url_for("auth.login", next=request.full_path.rstrip("?")))
         if g.user.must_change_password and request.endpoint not in {"auth.settings", "auth.logout"}:
             flash("Please set a new password to continue.")
+            return redirect(url_for("auth.settings"))
+        if mfa_enforced_for(g.user) and not g.user.mfa_enabled and request.endpoint not in MFA_SETUP_ENDPOINTS:
+            flash("Two-factor authentication is required for administrator accounts. Please set it up to continue.")
             return redirect(url_for("auth.settings"))
         return None
 
@@ -315,7 +325,7 @@ def settings():
             db.session.rollback()
             flash(f"❌ {exc}")
 
-    context = {}
+    context = {"mfa_enforced": mfa_enforced_for(user)}
     setup_secret = None if user.mfa_enabled else session.get("mfa_setup_secret")
     if setup_secret:
         context["mfa_secret"] = setup_secret
@@ -361,6 +371,9 @@ def mfa_enable():
 def mfa_disable():
     user = g.user
     if not user.mfa_enabled:
+        return redirect(url_for("auth.settings"))
+    if mfa_enforced_for(user):
+        flash("Two-factor authentication is required for administrator accounts and cannot be turned off.")
         return redirect(url_for("auth.settings"))
     code = request.form.get("code")
     code_ok = (

@@ -7,6 +7,7 @@ resources:
   - ../in-cluster-postgres      # base + PostgreSQL StatefulSet (+ its local-PVC backup, removed below)
   - s3-backup.yaml
   - networkpolicy-extra.yaml
+  - failed-login-alert.yaml
 images:
   # The base already renamed `lumieree` to this full name, so the override must match the full name:
   # matching `lumieree` here silently does nothing and the Deployment stays on `:latest`.

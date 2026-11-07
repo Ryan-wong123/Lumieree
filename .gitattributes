@@ -2,3 +2,4 @@
 * text=auto
 # Shell scripts run on Linux servers: never convert their line endings.
 *.sh text eol=lf
+deploy/site.env text eol=lf

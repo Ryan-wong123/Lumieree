@@ -47,13 +47,17 @@ spec:
             failureThreshold: 6
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true     # writable paths are the data volume and the two emptyDirs below
             capabilities:
               drop: ["ALL"]
           volumeMounts:
             - {name: data, mountPath: /var/lib/postgresql/data}
             - {name: run, mountPath: /var/run/postgresql}
+            - {name: tmp, mountPath: /tmp}
       volumes:
         - name: run
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}
   volumeClaimTemplates:
     - metadata:
@@ -95,5 +99,8 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: backup
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: alert
       ports:
         - {protocol: TCP, port: 5432}

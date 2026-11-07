@@ -76,6 +76,8 @@ only to the account that created them. Deleting an account deletes all of its da
 | AUTH-10 | Each code works once; the second step must be completed within 5 minutes and 5 tries, and is rate limited |
 | AUTH-11 | Turning two-factor on shows 8 one-time recovery codes exactly once; each works once. Turning it off needs the current password and a code (or a recovery code) |
 | AUTH-12 | A super admin can reset another user's two-factor (lost device and codes); the user's other sessions are signed out |
+| AUTH-13 | Two-factor is **mandatory for administrator accounts** (`admin`, `super_admin`) when `REQUIRE_MFA_FOR_ADMINS` is on (default in production): until it is set up they can reach only Settings and Logout, and they cannot turn it off. Staff may opt in |
+| AUTH-14 | Break-glass: an operator can turn off one account's two-factor with `flask reset-mfa --username <name>` (audited; the user is signed out and, if their role requires it, must set it up again) |
 
 ### 4.2 Patients (Implemented)
 
@@ -87,7 +89,7 @@ only to the account that created them. Deleting an account deletes all of its da
 | PAT-4 | The list shows each patient's confirmed-visit count |
 | PAT-5 | Deleting a patient deletes their visits; queue history is kept and shown as "Unknown (Deleted)" |
 | PAT-6 | **Export data** on the patient list downloads everything held about one patient (record and all visits, including drafts) as a JSON file, for access requests |
-| PAT-7 | Deleting a patient is the erasure path for deletion requests. Free-text appointment entries are not linked to patients and must be removed separately (see §10) |
+| PAT-7 | Deleting a patient is the erasure path for deletion requests. It also deletes that clinic's appointment entries for the patient, matched by name (case-insensitive) and, when both the patient and the entry have a contact number, by that number; the number of entries removed is shown and audited |
 
 ### 4.2a Audit log (Implemented)
 
@@ -95,6 +97,7 @@ only to the account that created them. Deleting an account deletes all of its da
 | --- | --- |
 | AUD-1 | The system records sign-ins (success, failure, second-factor failure, recovery-code use), logouts, password / e-mail / two-factor changes, patient view / create / update / export / erase, receipt views and PDFs, CSV exports, and account management, each with who, when, which record and the client IP |
 | AUD-2 | Admins read the log at **Audit Log** (newest first, filter by event prefix, paged). A clinic sees events on its own account; a super admin sees all |
+| AUD-4 | When at least 5 failed sign-ins (password or second factor) happen within 5 minutes, an e-mail alert with the top source addresses is sent through the alert topic (checked every 5 minutes) |
 | AUD-3 | Entries cannot be edited or deleted through the application and survive deletion of the user who caused them. The name typed for an unknown user is never stored |
 
 ### 4.3 Visits and prescriptions (Implemented)
@@ -219,13 +222,12 @@ Imported users receive random temporary passwords and must change them at first 
 | Several users per clinic (shared tenant) with per-user roles (physician vs front desk) | High |
 | Per-clinic receipt header and logo (currently per deployment) | High |
 | Batch-aware dispensing (FEFO: first-expiry-first-out across batches, expiry warnings) | High |
-| Enforce two-factor for `admin` / `super_admin` accounts; encrypt stored TOTP secrets with a managed key | High |
-| Audit log retention policy and an off-database copy; alerting on repeated failed logins | Medium |
-| Erasure that also removes free-text appointment entries for a patient (appointments are not linked to patients) | Medium |
+| Encrypt stored TOTP secrets with a managed key | High |
+| Audit log retention policy and an off-database copy; per-address lock-out after repeated failures | Medium |
 | Password reset by e-mail | Medium |
 | Remove `'unsafe-inline'` from `style-src` (move style attributes into the stylesheet); self-host CDN assets | Low |
 | Enable GuardDuty (needs a paid AWS plan) | Medium |
-| Read-only root filesystem for the in-cluster PostgreSQL pod (needs tested `emptyDir` mounts; Trivy KSV-0014 is excepted until then) | Medium |
+| Move to a purchased domain instead of the free DuckDNS name (needs the domain; the switch itself is one file, runbook §18) | High |
 | Metrics endpoint and tracing; alerting on low stock / expiring batches | Medium |
 | Receipt numbering sequence and stored receipts (currently generated on demand, numbered by timestamp) | Medium |
 | Pagination for very large patient / inventory lists | Low |
@@ -240,6 +242,7 @@ Imported users receive random temporary passwords and must change them at first 
 
 | Date | Change |
 | --- | --- |
+| 2026-11-09 | Round-two hardening: AUTH-13/14 (mandatory two-factor for administrators, break-glass reset), AUD-4 (failed-login e-mail alert), PAT-7 (erasure also removes appointment entries); PostgreSQL pod hardened; rollback drill passed; roadmap items done removed, custom-domain item added |
 | 2026-11-09 | §5 Supply chain: CI tooling (GitHub Actions) updated to current major versions, still pinned |
 | 2026-11-08 | §6: continuous delivery: merges to `main` deploy to production automatically (migrate first, verify, smoke test, automatic rollback), using a keyless AWS role limited to deploying a git SHA |
 | 2026-11-08 | §6: releases now really run the pinned image tag (kustomize override fixed for the production and AWS overlays) |

@@ -51,6 +51,9 @@ class Config:
     # Passwords
     MIN_PASSWORD_LENGTH = int(os.environ.get("MIN_PASSWORD_LENGTH", 12))
 
+    # Accounts with the admin or super_admin role must have two-factor authentication on (others may opt in).
+    REQUIRE_MFA_FOR_ADMINS = _bool("REQUIRE_MFA_FOR_ADMINS", APP_ENV == "production")
+
     # Receipt header (printed on PDF receipts)
     CLINIC_NAME_ZH = os.environ.get("CLINIC_NAME_ZH", "春秋堂中医药诊所")
     CLINIC_NAME = os.environ.get("CLINIC_NAME", "Harmony TCM Healthcare")
@@ -72,6 +75,7 @@ class TestingConfig(Config):
     LOGIN_RATE_LIMIT = "1000 per minute"  # effectively off; the rate-limit test lowers it
     WTF_CSRF_ENABLED = True
     MIN_PASSWORD_LENGTH = 12
+    REQUIRE_MFA_FOR_ADMINS = False  # tests that need it switch it on explicitly
 
 
 def validate(config) -> None:
