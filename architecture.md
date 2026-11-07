@@ -77,6 +77,8 @@ scripts/check_docs_updated.py  Docs-sync gate used by CI, git hook and the Claud
 .github/workflows/zap-baseline.yml  Manual passive OWASP ZAP scan of the production site (report attached to the run)
 deploy/deploy.sh             Release script run on the server: migrate -> roll out -> verify -> smoke test -> rollback on failure
 deploy/ssm-document.json     AWS Systems Manager document `lumieree-deploy` (input: a 40-character git SHA only)
+deploy/site.env              SITE_HOST: the one place the public hostname is defined (deploy script, CI smoke test, ZAP)
+deploy/rollback-drill.sh     Rollback drill on a throwaway namespace (bad image + never-ready pod, probed continuously)
 Dockerfile, docker-compose.yml, .dockerignore
 ```
 
@@ -152,7 +154,8 @@ All routes except those marked *public* require a logged-in, active account. `PO
 | `/static/<path:filename>` | GET | public | Static files |
 
 CLI commands (`flask …`): `create-super-admin`, `ensure-super-admin` (idempotent bootstrap from
-`BOOTSTRAP_ADMIN_*`), `import-firestore`, and the Flask-Migrate group `db`.
+`BOOTSTRAP_ADMIN_*`), `reset-mfa` (break-glass: turn off one account's two-factor, audited), `import-firestore`, and the
+Flask-Migrate group `db`.
 
 ## 6. Data model
 
@@ -200,7 +203,8 @@ Rules:
 | CSRF | Flask-WTF on all unsafe methods; state-changing GET routes were converted to POST |
 | XSS | Jinja autoescape; DOM APIs instead of string-built HTML in the appointments page; CSP `script-src` has no `'unsafe-inline'`: inline scripts need the per-request nonce and inline event handlers are not used (`data-*` attributes instead); `tests/test_security_hardening.py` scans templates for violations |
 | Tampered CDN assets | Every third-party `<script>` / `<link>` carries a Subresource Integrity hash (`integrity` + `crossorigin`); CI test fails if one lacks it |
-| Stolen password | Optional TOTP second factor (30 s step, ±1 step drift, each code usable once), 8 single-use recovery codes stored as hashes, 5-minute / 5-try pending login, rate limits, super-admin reset path; enabling or disabling signs out other browsers |
+| Stolen password | TOTP second factor, **mandatory for `admin` and `super_admin` accounts** (`REQUIRE_MFA_FOR_ADMINS`, on by default in production: until it is set up they can only reach Settings and Logout, and they cannot turn it off) and optional for staff (30 s step, ±1 step drift, each code usable once), 8 single-use recovery codes stored as hashes, 5-minute / 5-try pending login, rate limits, super-admin reset path and the `flask reset-mfa` break-glass command; enabling or disabling signs out other browsers |
+| Brute force noticed late | The `failed-login-alert` CronJob counts `auth.login_failed` + `auth.mfa_failed` audit rows every 5 minutes and publishes an SNS e-mail when there are at least 5 in 5 minutes (top source addresses included); its pod can reach only DNS, PostgreSQL, the metadata service and HTTPS |
 | No accountability / forensics | `audit_log` records sign-ins (success, failure, 2FA), password / e-mail / 2FA changes, patient view / create / update / export / erase, receipts, CSV exports and user management with actor, tenant and IP; the viewer is tenant-scoped |
 | Compromised CI / supply chain into production | Deploy role trusts only the `main` branch of this repository through OIDC (no stored keys), can only run one SSM document whose only parameter is a validated 40-hex SHA, and the deployed script comes from the reviewed commit; branch protection on `main` (pull request + passing checks) is what makes "merged" mean "reviewed and green"; Trivy and pinned actions limit what CI itself runs |
 | Data-subject requests | `/patients/<id>/export.json` (access) and `/patients/delete/<id>` (erasure incl. visits), both audited |
@@ -215,9 +219,10 @@ Rules:
 
 Known gaps (tracked in PRD §10): `style-src` still allows `'unsafe-inline'` (templates use style attributes); the
 TOTP secret is stored unencrypted in PostgreSQL (the database volume is encrypted at rest; encrypting the column would
-tie it to a key that must survive `SECRET_KEY` rotation); two-factor is optional, not enforced; the audit log has no
-retention policy or off-database copy; erasing a patient does not touch free-text appointment rows (they are not linked
-to patients); no alerting on repeated failed logins (events are in the audit log); no per-clinic multi-user tenancy.
+tie it to a key that must survive `SECRET_KEY` rotation); the audit log has no retention policy or off-database copy;
+erasing a patient removes appointment entries by name (and contact number when both sides have one), which is a
+heuristic because appointments are free text not linked to patients; the failed-login alert is a simple count
+(no per-IP lock-out, and a sustained attack sends an e-mail every 5 minutes); no per-clinic multi-user tenancy.
 
 ## 8. Configuration reference
 
@@ -236,6 +241,7 @@ Environment variables read by the application (defaults in `lumieree/config.py`)
 | `LOGIN_RATE_LIMIT` | `10 per minute;60 per hour` | Limit on `POST /login` per client IP |
 | `TRUSTED_PROXY_COUNT` | `0` | Number of reverse proxies in front of the app |
 | `MIN_PASSWORD_LENGTH` | `12` | Password policy |
+| `REQUIRE_MFA_FOR_ADMINS` | `true` in production, else `false` | Administrators (`admin`, `super_admin`) must have two-factor authentication on |
 | `CLINIC_NAME`, `CLINIC_NAME_ZH`, `CLINIC_REG_NO`, `CLINIC_ADDRESS` | Harmony TCM values | Receipt header text |
 | `FONT_DIR` | – | Directory with `NotoSansCJKsc-Regular.otf` / `-Bold.otf` (optional) |
 | `LOG_LEVEL` | `INFO` | Root log level |
@@ -280,7 +286,11 @@ flowchart TB
   `AmazonSSMManagedInstanceCore`); the security group opens only 80 and 443, **not 22**. Daily EBS snapshots (Data
   Lifecycle Manager, 7 kept, volume tag `Backup=lumieree-daily`), a CloudTrail trail (multi-region, log validation,
   private bucket) and a Route 53 health check on `/healthz` with a CloudWatch alarm e-mailing an SNS topic
-  (`lumieree-alerts`) provide recovery, audit and uptime alerting.
+  (`lumieree-alerts`) provide recovery, audit and uptime alerting. The `failed-login-alert` CronJob (`lumieree-alert`
+ConfigMap holds the topic, window and threshold) uses the instance role's `sns:Publish` on that topic. The PostgreSQL
+pod runs with a **read-only root filesystem** (writable: the data volume, the socket directory and `/tmp`). The public
+hostname is defined once in `deploy/site.env`; moving to a purchased domain is a DNS record plus a one-line change
+(runbook §18).
 * **Release pipeline (CD)**: every commit merged to `main` that passes the CI jobs is deployed automatically
   (details in §11). The `deploy` job assumes an AWS role through GitHub OIDC and runs the SSM document
   `lumieree-deploy` with the commit SHA; the server fetches that exact commit and runs `deploy/deploy.sh`, which checks
@@ -324,6 +334,9 @@ endpoint or tracing yet (PRD §10).
   the command. It then smoke-tests the public site (`/readyz`, `/healthz`, HTTP -> HTTPS 308, nonce CSP). No AWS keys are
   stored in GitHub. `tests/test_deploy_config.py` pins these properties (valid script, SHA-only document, gated
   keyless job, full-name image override).
+* `deploy/rollback-drill.sh` (run manually on the server) rehearses a failed release on a throwaway namespace: a bad
+  image and a never-ready pod are rolled back with the same `kubectl rollout undo` sequence as `deploy.sh` while the
+  service is probed every half second (it must answer with the old version, with zero failed probes).
 * `.github/workflows/zap-baseline.yml` (manual) runs a passive OWASP ZAP baseline scan against the production URL; it
   covers the unauthenticated pages only (it does not log in), so authenticated pages rely on the tests above.
 
@@ -360,7 +373,12 @@ history).
 | Migrate first, then roll out, auto-rollback on failure | Migrations are expand-only so the old version keeps working; if the new version fails its rollout or smoke test, `rollout undo` restores the previous revision (the new schema stays, which the old version tolerates) |
 | Every merge to `main` deploys, no manual approval gate | Requested; the safety net is required checks, the smoke test and automatic rollback. A GitHub `production` environment with required reviewers can be added later without changing the pipeline |
 | `redis` client held below 8 (7.4.1); Dependabot ignores its major updates | Flask-Limiter's `limits` package declares `redis<8`, and production rate limiting runs on Redis, so an unsupported client could break login with errors. A real-Redis CI test guards the combination |
-| Trivy exception KSV-0014 for the in-cluster PostgreSQL StatefulSet | A read-only root filesystem needs extra `emptyDir` mounts for the socket directory and `/tmp`; changing the live database pod without a tested manifest was judged riskier than the finding. Scoped to that one file in `.trivyignore.yaml` and tracked in PRD §10 |
+| PostgreSQL pod runs with a read-only root filesystem (no Trivy exception) | Tested first on a throwaway pod: fresh start, writes, a forced crash and recovery on the existing data, and a write attempt on `/` all behaved correctly. Only `/tmp` needed adding to the existing socket-directory `emptyDir`. The earlier KSV-0014 exception was removed |
+| Two-factor mandatory for administrators, with `flask reset-mfa` as break-glass | An administrator account is the highest-value target; enforcement is a setting (`REQUIRE_MFA_FOR_ADMINS`) and a locked-out admin can always be reset by another super admin or through the CLI over Session Manager |
+| Failed-login alert as a CronJob that reads the audit log and publishes to SNS | Reuses the proven backup-pod pattern and the existing alert topic; no SMTP credentials in the app, no log-shipping agent. Trade-off: a simple threshold, polled every 5 minutes |
+| Appointment entries are erased by name (+ contact) | Appointments are free text with no link to patients; matching on name, and on the contact number when both sides have one, avoids deleting a different person's booking while still removing the erased patient's |
+| One `deploy/site.env` for the hostname | The deploy script, the CI smoke test and the ZAP scan can no longer disagree about the site address, and a domain change is a single reviewed edit |
+| Rollback drill on a throwaway namespace, not the live site | Proves detection and rollback mechanics (bad image and never-ready pod) under continuous probing without risking the clinic; the migration step and smoke test inside `deploy.sh` are exercised by every real release |
 | Session Manager instead of SSH, port 22 closed | Removes the internet-reachable admin port and the moving-IP allow-list; access is controlled by IAM and logged by CloudTrail |
 | GuardDuty not enabled | Requires a paid AWS account plan (the Free plan returns `SubscriptionRequiredException`); revisit after upgrading |
 
@@ -368,6 +386,7 @@ history).
 
 | Date | Change |
 | --- | --- |
+| 2026-11-09 | Round-two hardening: `REQUIRE_MFA_FOR_ADMINS` (administrators confined to two-factor set-up, cannot turn it off) and `flask reset-mfa`; `failed-login-alert` CronJob (+ `alert` NetworkPolicy, SNS publish via the instance role); erasing a patient also removes matching appointment entries; PostgreSQL pod read-only root filesystem (tested on a throwaway pod; Trivy exception removed); `deploy/rollback-drill.sh` run and passed; hostname moved to `deploy/site.env` |
 | 2026-11-09 | CI actions updated (still pinned to commit SHAs): checkout 7.0.1, setup-python 7.1.0, docker login 4.7.0, build-push 7.4.0, setup-buildx 4.4.1 (applied as one grouped change instead of five Dependabot PRs that would conflict and deploy five times) |
 | 2026-11-09 | Python libraries updated: Flask-Limiter 4.1.1, SQLAlchemy 2.1.8, redis 7.4.1 (Dependabot's redis 8.1.0 rejected: outside the range `limits` supports), firebase-admin >=7.7.0 for the one-off import; CI gains a Redis service and a real-Redis rate-limit test; Dependabot ignores redis major updates |
 | 2026-11-08 | SSM deploy document uses `sh`-compatible `set -eu` (the first automatic deploy attempt failed on `set -o pipefail` before changing anything; fixed in AWS and in `deploy/ssm-document.json`, with a test); first automatic deploy of `1f688e2` succeeded |

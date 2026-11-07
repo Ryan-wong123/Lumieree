@@ -417,7 +417,9 @@ Delete the DuckDNS domain on duckdns.org if you no longer need it.
 - [x] Port 22 closed and admin access through Session Manager (§16.2); port 6443 closed
 - [x] Kubernetes Secrets encrypted at rest (§16.1), daily EBS snapshots (§16.3), CloudTrail (§16.4), uptime alarm (§16.5)
 - [ ] Two-factor turned on for every `admin` / `super_admin` account (Settings → Two-factor authentication)
-- [x] Automatic deployment with smoke test and rollback (§17); [ ] branch protection on `main` enabled (§17)
+- [x] Automatic deployment with smoke test and rollback (§17); [x] branch protection on `main` enabled (§17)
+- [x] Two-factor mandatory for administrators; failed-login alerts (§16.6); read-only database filesystem; rollback drill passed
+- [ ] Own domain (§18)
 - [ ] `SECRET_KEY` random (≥ 32 chars), bootstrap password long and changed after first login
 - [ ] HTTPS works and HTTP redirects; `SESSION_COOKIE_SECURE=true` (already in the ConfigMap)
 - [ ] Backups verified by a real restore; bucket private, versioned, encrypted, TLS-only
@@ -500,8 +502,23 @@ aws cloudwatch put-metric-alarm --region $R --alarm-name lumieree-down --namespa
   --comparison-operator LessThanThreshold --alarm-actions $TOPIC --ok-actions $TOPIC --treat-missing-data breaching
 ```
 
-The subscription stays "pending confirmation" (no alerts) until the e-mail link is clicked. Failed-login monitoring is done
-in the application: **Audit Log** page, filter `auth.login_failed`.
+The subscription stays "pending confirmation" (no alerts) until the e-mail link is clicked. Failed-login alerts use the same topic (§16.6); the events
+are also on the **Audit Log** page (filter `auth.`).
+
+**16.6 Failed-login e-mail alerts.** The CronJob `failed-login-alert` (manifest `k8s/overlays/aws-k3s/failed-login-alert.yaml`, deployed with
+the overlay) publishes to the SNS topic when there are at least 5 failed sign-ins in 5 minutes. It needs one IAM permission on
+the instance role (once):
+
+```bash
+aws iam put-role-policy --role-name ${APP}-ec2 --policy-name alert-publish --policy-document '{
+  "Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sns:Publish",
+   "Resource":"arn:aws:sns:us-east-1:'$ACCOUNT_ID':lumieree-alerts"}]}'
+```
+
+Test it: make 6 wrong-password attempts on the login page, then run
+`kubectl -n lumieree create job --from=cronjob/failed-login-alert alert-test` and read `kubectl -n lumieree logs job/alert-test -c notify`
+("alert sent" and an e-mail within a minute; a spent job: `kubectl -n lumieree delete job alert-test`). Tune the window and
+threshold in the `lumieree-alert` ConfigMap. Like the backup pod, this pod can use the instance role through the metadata service.
 
 **Teardown additions** (§14): delete the DLM policy and its snapshots, the CloudTrail trail and bucket, the health check,
 alarm and SNS topic, and detach `AmazonSSMManagedInstanceCore` before deleting the role.
@@ -564,8 +581,40 @@ deletion. Without it anyone with write access could push straight to `main` and 
   registry" means the `image` job did not publish that SHA; `AccessDenied` on `AssumeRoleWithWebIdentity` means the
   workflow ran from a branch other than `main` or the repository name in the trust policy does not match.
 
+**Rollback drill** (`deploy/rollback-drill.sh`, run 2026-11-09: passed). Rehearses a failed release without touching the application:
+a throwaway namespace `rollback-drill` with a tiny stand-in web app (2 replicas, the same rolling-update settings), a release with
+an image that does not exist and a release whose pod never becomes ready, each detected and undone with `kubectl rollout undo`,
+while the service is probed every half second. It passes only if both bad releases are detected, the old version answers
+afterwards and no probe failed. Run it from CloudShell with Session Manager (send the script with
+`aws ssm send-command --document-name AWS-RunShellScript` and `KUBECONFIG=/etc/rancher/k3s/k3s.yaml bash rollback-drill.sh`) or
+on the server. Repeat it after changing the rollout settings or the deploy script. It does not exercise the migration
+step or the smoke test in `deploy.sh`; those run on every real release.
+
 **Teardown additions** (§14): delete the role `lumieree-github-deploy` (and its inline policy) and the SSM document
 `lumieree-deploy`; leave the OIDC provider if another project uses it.
+
+---
+
+## 18. Moving to your own domain (instead of the free DuckDNS name)
+
+A purchased domain removes the dependency on a free third-party DNS service (a stolen DuckDNS token could redirect your
+address) and lets you turn on registrar protections. The switch is small because the hostname lives in **one file**,
+`deploy/site.env`; the deploy script (ingress host and TLS certificate), the CI smoke test and the ZAP scan all read it.
+
+1. **Buy the domain** (a registrar or Route 53). Turn on the registrar's lock and two-factor sign-in. This costs money and
+   needs you; an assistant cannot buy it.
+2. **Point it at the server:** create an `A` record for the name you want (for example `clinic.example.com`) to the Elastic IP
+   (`13.228.18.220`), with a short TTL. Check with `dig +short clinic.example.com`.
+3. **Change `SITE_HOST`** in `deploy/site.env` in a pull request and merge it. The automatic deploy renders the ingress with
+   the new host; cert-manager then gets a Let's Encrypt certificate for it (HTTP-01 needs the DNS record from step 2 to be
+   live first). The CI smoke test and ZAP follow the new name automatically.
+4. **Update the uptime check** (it lives in AWS, not in the repo): `aws route53 update-health-check --health-check-id $HC
+   --fully-qualified-domain-name clinic.example.com` (`$HC` is in `~/lumieree-resources.txt`).
+5. **Tell your users** the new address. The old DuckDNS name stops working at the deploy in step 3 (to keep both for a
+   while, add the second host to the ingress rules and TLS hosts in the overlay patch first).
+6. **Clean up:** delete the DuckDNS record and revoke its token; if the old name was bookmarked by staff, remove the bookmark.
+
+Cookies are host-bound: everyone signs in again after the switch. Nothing else in the application depends on the hostname.
 
 ---
 

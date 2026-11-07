@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 from flask import Flask
 
+from . import audit
 from .auth import create_user
 from .extensions import db
 from .models import User
@@ -25,6 +26,22 @@ def register_cli(app: Flask) -> None:
         except ValidationError as exc:
             raise click.ClickException(str(exc)) from exc
         click.echo(f"Super admin created: {user.username} (id {user.id})")
+
+    @app.cli.command("reset-mfa")
+    @click.option("--username", prompt=True, help="Account whose two-factor authentication should be turned off")
+    def reset_mfa(username):
+        """Break-glass: turn off two-factor for an account (lost device and no other super admin to reset it).
+
+        The user is signed out everywhere and, if two-factor is required for their role, must set it up again.
+        """
+        user = db.session.execute(db.select(User).where(User.username == username.strip().lower())).scalar_one_or_none()
+        if user is None:
+            raise click.ClickException("No such user.")
+        user.mfa_enabled, user.totp_secret, user.mfa_last_step, user.mfa_backup_codes = False, None, None, []
+        user.session_version += 1
+        db.session.commit()
+        audit.record("admin.mfa_reset_cli", target_type="user", target_id=user.id, owner_id=user.id, detail="via CLI")
+        click.echo(f"Two-factor authentication reset for {user.username}.")
 
     @app.cli.command("ensure-super-admin")
     def ensure_super_admin():

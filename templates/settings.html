@@ -23,6 +23,9 @@
 <h5>{{ t('mfa_title') }}</h5>
 {% if current_user.mfa_enabled %}
 <p class="text-success">{{ t('mfa_is_on') }}</p>
+{% if mfa_enforced %}
+<p class="text-muted">{{ t('mfa_required_locked') }}</p>
+{% else %}
 <form method="POST" action="{{ url_for('auth.mfa_disable') }}" style="max-width:520px;" class="mb-4">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="form-text mb-2">{{ t('mfa_off_hint') }}</div>
@@ -32,6 +35,7 @@
     placeholder="{{ t('mfa_code') }}" required>
   <button class="btn btn-outline-danger">{{ t('mfa_turn_off') }}</button>
 </form>
+{% endif %}
 {% elif mfa_secret %}
 <p>{{ t('mfa_scan') }}</p>
 <img src="{{ mfa_qr }}" alt="QR code" width="200" height="200" class="mb-2 border">
@@ -44,6 +48,7 @@
   <button class="btn btn-success">{{ t('mfa_turn_on') }}</button>
 </form>
 {% else %}
+{% if mfa_enforced %}<div class="alert alert-warning">{{ t('mfa_required_banner') }}</div>{% endif %}
 <p class="text-muted">{{ t('mfa_intro') }}</p>
 <form method="POST" action="{{ url_for('auth.mfa_start') }}" class="mb-4">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
