@@ -74,6 +74,7 @@ k8s/base, k8s/overlays/, k8s/addons/  Kubernetes manifests: base, overlays (prod
 scripts/check_docs_updated.py  Docs-sync gate used by CI, git hook and the Claude Code Stop hook
 .github/workflows/ci.yml     Lint, tests (PostgreSQL), migration round-trip, docs gate, Trivy (repo + image), image build
 .github/dependabot.yml       Weekly update PRs for pip, GitHub Actions and Docker base images
+.github/workflows/zap-baseline.yml  Manual passive OWASP ZAP scan of the production site (report attached to the run)
 Dockerfile, docker-compose.yml, .dockerignore
 ```
 
@@ -253,7 +254,9 @@ flowchart TB
     end
 ```
 
-* **Image**: multi-stage `Dockerfile` (builder venv → slim runtime), non-root, `HEALTHCHECK` on `/healthz`.
+* **Image**: multi-stage `Dockerfile` (builder venv built without pip → slim runtime), non-root, `HEALTHCHECK` on
+  `/healthz`. The runtime stage applies Debian security updates (`apt-get upgrade`) and removes pip / setuptools / wheel,
+  which the app never uses at run time (they only add attack surface and scanner findings).
   gunicorn runs without the control socket and with `/dev/shm` worker temp files so the root FS can be read-only.
 * **Local**: `docker compose up --build` starts PostgreSQL, a one-shot `migrate` service (also bootstraps the first
   super admin from `BOOTSTRAP_ADMIN_*`), then the web service on `localhost:8080`.
@@ -299,10 +302,13 @@ endpoint or tracing yet (PRD §10).
   the audit log, CSP nonce / SRI, patient export and erasure, the Firestore import mapping, and docs/code consistency.
 * CI (`.github/workflows/ci.yml`): `ruff check` + `ruff format --check`, `pytest` on PostgreSQL, a migration
   round-trip (`upgrade` → `check` → `downgrade base` → `upgrade`), the docs-sync gate on pull requests, a Trivy
-  filesystem scan (dependencies, secrets, Dockerfile / Kubernetes misconfiguration; fails on fixable HIGH/CRITICAL),
+  filesystem scan (dependencies, secrets, Dockerfile / Kubernetes misconfiguration; fails on fixable HIGH/CRITICAL;
+  reviewed exceptions live in `.trivyignore.yaml`, each with a reason),
   and the container image build with a Trivy image scan before it is pushed to GHCR from `main` (the owner name is
   lower-cased because registry names must be). GitHub Actions are pinned to commit SHAs and the Dockerfile and CI
   PostgreSQL base images to digests; `.github/dependabot.yml` opens weekly update PRs (pip, Actions, Docker).
+* `.github/workflows/zap-baseline.yml` (manual) runs a passive OWASP ZAP baseline scan against the production URL; it
+  covers the unauthenticated pages only (it does not log in), so authenticated pages rely on the tests above.
 
 ## 12. Migration from Firebase
 
@@ -331,6 +337,7 @@ history).
 | Two-factor optional per account, not enforced | Avoids locking out existing users; a super admin can reset it. Enforcement for admins is a roadmap item |
 | Audit log in PostgreSQL, append-only by convention, `SET NULL` foreign keys | Survives user deletion without a separate service; the attempted name of an unknown user is never stored |
 | CSP nonces instead of extracting all inline scripts | Smallest change that removes `'unsafe-inline'` from `script-src`; inline handlers replaced by `data-*` attributes |
+| Trivy exception KSV-0014 for the in-cluster PostgreSQL StatefulSet | A read-only root filesystem needs extra `emptyDir` mounts for the socket directory and `/tmp`; changing the live database pod without a tested manifest was judged riskier than the finding. Scoped to that one file in `.trivyignore.yaml` and tracked in PRD §10 |
 | Session Manager instead of SSH, port 22 closed | Removes the internet-reachable admin port and the moving-IP allow-list; access is controlled by IAM and logged by CloudTrail |
 | GuardDuty not enabled | Requires a paid AWS account plan (the Free plan returns `SubscriptionRequiredException`); revisit after upgrading |
 
@@ -338,7 +345,7 @@ history).
 
 | Date | Change |
 | --- | --- |
-| 2026-11-08 | Security hardening: optional TOTP two-factor (`/login/mfa`, `/settings/mfa/*`, users columns), `audit_log` table + `/admin/audit`, per-patient export (`/patients/<id>/export.json`), CSP nonce without `'unsafe-inline'` scripts, SRI on CDN assets (dead FullCalendar CSS/locales URLs fixed), Trivy + Dependabot + pinned Actions/base images in CI, `segno` dependency, migration `0002_mfa_audit`; AWS: k3s secrets encryption, Session Manager with port 22 closed, daily EBS snapshots, CloudTrail, uptime alarm |
+| 2026-11-08 | Security hardening: optional TOTP two-factor (`/login/mfa`, `/settings/mfa/*`, users columns), `audit_log` table + `/admin/audit`, per-patient export (`/patients/<id>/export.json`), CSP nonce without `'unsafe-inline'` scripts, SRI on CDN assets (dead FullCalendar CSS/locales URLs fixed), Trivy + Dependabot + pinned Actions/base images in CI (Trivy found and the Dockerfile now fixes fixable `zlib1g` and pip-tooling findings in the image), manual ZAP baseline workflow, `segno` dependency, migration `0002_mfa_audit`; AWS: k3s secrets encryption, Session Manager with port 22 closed, daily EBS snapshots, CloudTrail, uptime alarm |
 | 2026-11-07 | S3 backup job waits for PostgreSQL (`pg_isready` loop) before `pg_dump`: k3s programs NetworkPolicy allow rules a few seconds after pod start, so the first connection was refused; runbook marked as executed end to end with tested notes (Free-plan instance type, full-SHA image tag) |
 | 2026-11-07 | CI image job lower-cases the GitHub owner in the GHCR image name (mixed-case owners made the build fail) |
 | 2026-11-07 | Added the AWS reference deployment: `k8s/overlays/aws-k3s` (S3 backup CronJob, extra NetworkPolicies), `k8s/addons/cluster-issuer.yaml`, and a full EC2 + k3s + S3 + DuckDNS runbook in `docs/deployment.md` |

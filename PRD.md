@@ -220,6 +220,7 @@ Imported users receive random temporary passwords and must change them at first 
 | Password reset by e-mail | Medium |
 | Remove `'unsafe-inline'` from `style-src` (move style attributes into the stylesheet); self-host CDN assets | Low |
 | Enable GuardDuty (needs a paid AWS plan) | Medium |
+| Read-only root filesystem for the in-cluster PostgreSQL pod (needs tested `emptyDir` mounts; Trivy KSV-0014 is excepted until then) | Medium |
 | Metrics endpoint and tracing; alerting on low stock / expiring batches | Medium |
 | Receipt numbering sequence and stored receipts (currently generated on demand, numbered by timestamp) | Medium |
 | Pagination for very large patient / inventory lists | Low |

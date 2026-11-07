@@ -1,0 +1,20 @@
+name: ZAP baseline scan
+
+# Manual only. Passive OWASP ZAP scan of the production site (spiders the public pages, does not attack,
+# does not log in). Run it from the Actions tab; the HTML/JSON report is attached to the run.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: https://lumieree.duckdns.org
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-baseline-report

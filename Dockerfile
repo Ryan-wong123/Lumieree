@@ -7,7 +7,7 @@ COPY requirements.txt .
 #   docker build --secret id=pip_ca,src=/path/to/ca-bundle.crt .
 RUN --mount=type=secret,id=pip_ca,required=false \
     if [ -f /run/secrets/pip_ca ]; then export PIP_CERT=/run/secrets/pip_ca; fi; \
-    python -m venv /opt/venv && /opt/venv/bin/pip install -r requirements.txt
+    python -m venv --without-pip /opt/venv && pip --python /opt/venv/bin/python install -r requirements.txt
 
 FROM python:3.13-slim@sha256:09a17cad02668ae61ece136b4fd36ac3849e14f670ebedb637ea3e15580525bc AS runtime
 ENV PYTHONUNBUFFERED=1 \
@@ -16,6 +16,10 @@ ENV PYTHONUNBUFFERED=1 \
     APP_ENV=production \
     FLASK_APP=wsgi.py \
     PORT=8080
+# Apply Debian security updates (the digest-pinned base image can lag behind), and drop the packaging tools the app
+# never uses at run time: they only add attack surface and scanner findings.
+RUN apt-get update && apt-get -y --no-install-recommends upgrade && rm -rf /var/lib/apt/lists/* \
+    && /usr/local/bin/python -m pip uninstall -y pip setuptools wheel
 # Non-root user with a fixed UID so Kubernetes `runAsNonRoot` can verify it.
 RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app
 WORKDIR /app
