@@ -240,6 +240,7 @@ Imported users receive random temporary passwords and must change them at first 
 
 | Date | Change |
 | --- | --- |
+| 2026-11-09 | §5 Supply chain: CI tooling (GitHub Actions) updated to current major versions, still pinned |
 | 2026-11-08 | §6: continuous delivery: merges to `main` deploy to production automatically (migrate first, verify, smoke test, automatic rollback), using a keyless AWS role limited to deploying a git SHA |
 | 2026-11-08 | §6: releases now really run the pinned image tag (kustomize override fixed for the production and AWS overlays) |
 | 2026-11-08 | Security hardening: added AUTH-9…12 (two-factor), PAT-6/7 (patient export and erasure), AUD-1…3 (audit log), supply-chain and CSP/SRI NFRs, AWS operations (Session Manager, snapshots, CloudTrail, uptime alarm); roadmap updated |
