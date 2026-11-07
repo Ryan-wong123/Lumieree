@@ -170,6 +170,10 @@ Imported users receive random temporary passwords and must change them at first 
 ## 6. Release and deployment requirements
 
 * Single container image published by CI; configuration only through environment variables and Secrets.
+* **Continuous delivery**: a change merged to `main` is built, tested, scanned and, if everything passes, deployed to
+  production automatically with the commit SHA as the image tag. A release migrates the database first, verifies the
+  new version and rolls back automatically if it does not become healthy. `main` is protected so that only reviewed
+  (pull request) and green changes can reach it.
 * Database changes only through Alembic migrations, applied by a Job before rollout; backward-compatible for one release.
 * First super admin created by a bootstrap step, never through the public UI.
 * Reference production target: a single AWS EC2 instance running k3s, a DuckDNS sub-domain with a Let's Encrypt
@@ -206,6 +210,7 @@ Imported users receive random temporary passwords and must change them at first 
 | Login identifier | Username (previously a Gmail address was synthesised from the typed name) |
 | Two-factor | Optional per account (TOTP app + recovery codes); enforcement for admins is on the roadmap |
 | Admin access to the server | AWS Session Manager instead of SSH; port 22 closed |
+| Release process | Automatic deployment on every merge to `main` (no manual approval), with smoke test and automatic rollback |
 
 ## 10. Known limitations and roadmap
 
@@ -235,6 +240,7 @@ Imported users receive random temporary passwords and must change them at first 
 
 | Date | Change |
 | --- | --- |
+| 2026-11-08 | §6: continuous delivery: merges to `main` deploy to production automatically (migrate first, verify, smoke test, automatic rollback), using a keyless AWS role limited to deploying a git SHA |
 | 2026-11-08 | §6: releases now really run the pinned image tag (kustomize override fixed for the production and AWS overlays) |
 | 2026-11-08 | Security hardening: added AUTH-9…12 (two-factor), PAT-6/7 (patient export and erasure), AUD-1…3 (audit log), supply-chain and CSP/SRI NFRs, AWS operations (Session Manager, snapshots, CloudTrail, uptime alarm); roadmap updated |
 | 2026-11-07 | §6: nightly S3 backup job made reliable on k3s (waits for PostgreSQL before dumping); AWS runbook verified end to end |

@@ -75,6 +75,8 @@ scripts/check_docs_updated.py  Docs-sync gate used by CI, git hook and the Claud
 .github/workflows/ci.yml     Lint, tests (PostgreSQL), migration round-trip, docs gate, Trivy (repo + image), image build
 .github/dependabot.yml       Weekly update PRs for pip, GitHub Actions and Docker base images
 .github/workflows/zap-baseline.yml  Manual passive OWASP ZAP scan of the production site (report attached to the run)
+deploy/deploy.sh             Release script run on the server: migrate -> roll out -> verify -> smoke test -> rollback on failure
+deploy/ssm-document.json     AWS Systems Manager document `lumieree-deploy` (input: a 40-character git SHA only)
 Dockerfile, docker-compose.yml, .dockerignore
 ```
 
@@ -200,6 +202,7 @@ Rules:
 | Tampered CDN assets | Every third-party `<script>` / `<link>` carries a Subresource Integrity hash (`integrity` + `crossorigin`); CI test fails if one lacks it |
 | Stolen password | Optional TOTP second factor (30 s step, ±1 step drift, each code usable once), 8 single-use recovery codes stored as hashes, 5-minute / 5-try pending login, rate limits, super-admin reset path; enabling or disabling signs out other browsers |
 | No accountability / forensics | `audit_log` records sign-ins (success, failure, 2FA), password / e-mail / 2FA changes, patient view / create / update / export / erase, receipts, CSV exports and user management with actor, tenant and IP; the viewer is tenant-scoped |
+| Compromised CI / supply chain into production | Deploy role trusts only the `main` branch of this repository through OIDC (no stored keys), can only run one SSM document whose only parameter is a validated 40-hex SHA, and the deployed script comes from the reviewed commit; branch protection on `main` (pull request + passing checks) is what makes "merged" mean "reviewed and green"; Trivy and pinned actions limit what CI itself runs |
 | Data-subject requests | `/patients/<id>/export.json` (access) and `/patients/delete/<id>` (erasure incl. visits), both audited |
 | Mass assignment | Explicit field whitelists per form (`_patient_from_form`, `_medicine_from_form`) |
 | Open redirect | `is_safe_next()` for `next` parameters |
@@ -278,6 +281,12 @@ flowchart TB
   Lifecycle Manager, 7 kept, volume tag `Backup=lumieree-daily`), a CloudTrail trail (multi-region, log validation,
   private bucket) and a Route 53 health check on `/healthz` with a CloudWatch alarm e-mailing an SNS topic
   (`lumieree-alerts`) provide recovery, audit and uptime alerting.
+* **Release pipeline (CD)**: every commit merged to `main` that passes the CI jobs is deployed automatically
+  (details in §11). The `deploy` job assumes an AWS role through GitHub OIDC and runs the SSM document
+  `lumieree-deploy` with the commit SHA; the server fetches that exact commit and runs `deploy/deploy.sh`, which checks
+  the image is published, runs the migration Job, applies the overlay with the SHA as image tag, verifies the Deployment
+  runs that image, smoke-tests `/readyz` and `/healthz` through the ingress, and runs `kubectl rollout undo` if the
+  rollout or smoke test fails. The runbook's manual steps remain the fallback.
 * **Migrations** run as a separate Job **before** a rollout (never at web start-up) so replicas cannot race.
   Rolling updates use `maxUnavailable: 0`; schema changes must therefore be backward compatible for one release
   (expand → deploy → contract).
@@ -307,6 +316,13 @@ endpoint or tracing yet (PRD §10).
   and the container image build with a Trivy image scan before it is pushed to GHCR from `main` (the owner name is
   lower-cased because registry names must be). GitHub Actions are pinned to commit SHAs and the Dockerfile and CI
   PostgreSQL base images to digests; `.github/dependabot.yml` opens weekly update PRs (pip, Actions, Docker).
+* **Continuous deployment**: the `deploy` job in `ci.yml` (`needs: [test, trivy-fs, image]`, only for pushes to `main`,
+  serialised by a `production-deploy` concurrency group that never cancels a running deploy) requests
+  `id-token: write`, assumes `lumieree-github-deploy` (OIDC trust limited to `repo:Ryan-wong123/Lumieree:ref:refs/heads/main`;
+  permission only to run the `lumieree-deploy` SSM document on the one instance, plus read command results) and waits for
+  the command. It then smoke-tests the public site (`/readyz`, `/healthz`, HTTP -> HTTPS 308, nonce CSP). No AWS keys are
+  stored in GitHub. `tests/test_deploy_config.py` pins these properties (valid script, SHA-only document, gated
+  keyless job, full-name image override).
 * `.github/workflows/zap-baseline.yml` (manual) runs a passive OWASP ZAP baseline scan against the production URL; it
   covers the unauthenticated pages only (it does not log in), so authenticated pages rely on the tests above.
 
@@ -338,6 +354,10 @@ history).
 | Audit log in PostgreSQL, append-only by convention, `SET NULL` foreign keys | Survives user deletion without a separate service; the attempted name of an unknown user is never stored |
 | CSP nonces instead of extracting all inline scripts | Smallest change that removes `'unsafe-inline'` from `script-src`; inline handlers replaced by `data-*` attributes |
 | Overlay `images:` entries match the full image name, not `lumieree` | The base already renames `lumieree` to `ghcr.io/ryan-wong123/lumieree:latest`; an overlay entry still matching `lumieree` finds nothing and silently keeps `:latest`. The runbook now checks the running image after a deploy |
+| CD through an SSM document + OIDC role, not SSH or stored keys | Port 22 is closed; SSM is already the admin path and is audited in CloudTrail. A custom document with a regex-validated SHA parameter means a stolen CI token can only deploy a commit, not run arbitrary commands |
+| Deploy script lives in the repo and runs from the commit being deployed | One reviewed source of truth; no unmanaged script on the server. Trade-off: whoever can merge to `main` can change what runs as the deploy, hence branch protection |
+| Migrate first, then roll out, auto-rollback on failure | Migrations are expand-only so the old version keeps working; if the new version fails its rollout or smoke test, `rollout undo` restores the previous revision (the new schema stays, which the old version tolerates) |
+| Every merge to `main` deploys, no manual approval gate | Requested; the safety net is required checks, the smoke test and automatic rollback. A GitHub `production` environment with required reviewers can be added later without changing the pipeline |
 | Trivy exception KSV-0014 for the in-cluster PostgreSQL StatefulSet | A read-only root filesystem needs extra `emptyDir` mounts for the socket directory and `/tmp`; changing the live database pod without a tested manifest was judged riskier than the finding. Scoped to that one file in `.trivyignore.yaml` and tracked in PRD §10 |
 | Session Manager instead of SSH, port 22 closed | Removes the internet-reachable admin port and the moving-IP allow-list; access is controlled by IAM and logged by CloudTrail |
 | GuardDuty not enabled | Requires a paid AWS account plan (the Free plan returns `SubscriptionRequiredException`); revisit after upgrading |
@@ -346,6 +366,7 @@ history).
 
 | Date | Change |
 | --- | --- |
+| 2026-11-08 | Continuous deployment: `deploy` job in `ci.yml` (OIDC role `lumieree-github-deploy`, SSM document `lumieree-deploy`), `deploy/deploy.sh` (migrate, roll out, verify image, smoke test, automatic rollback), post-deploy smoke test from the runner, `tests/test_deploy_config.py`; runbook §13 / §17 |
 | 2026-11-08 | Fixed the `images:` override in `overlays/production` and `overlays/aws-k3s` (it matched `lumieree`, which the base had already renamed, so the pinned tag was ignored and pods ran `:latest`); runbook verifies the running image |
 | 2026-11-08 | Security hardening: optional TOTP two-factor (`/login/mfa`, `/settings/mfa/*`, users columns), `audit_log` table + `/admin/audit`, per-patient export (`/patients/<id>/export.json`), CSP nonce without `'unsafe-inline'` scripts, SRI on CDN assets (dead FullCalendar CSS/locales URLs fixed), Trivy + Dependabot + pinned Actions/base images in CI (Trivy found and the Dockerfile now fixes fixable `zlib1g` and pip-tooling findings in the image), manual ZAP baseline workflow, `segno` dependency, migration `0002_mfa_audit`; AWS: k3s secrets encryption, Session Manager with port 22 closed, daily EBS snapshots, CloudTrail, uptime alarm |
 | 2026-11-07 | S3 backup job waits for PostgreSQL (`pg_isready` loop) before `pg_dump`: k3s programs NetworkPolicy allow rules a few seconds after pod start, so the first connection was refused; runbook marked as executed end to end with tested notes (Free-plan instance type, full-SHA image tag) |
