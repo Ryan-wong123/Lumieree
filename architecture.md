@@ -270,7 +270,7 @@ There is no metrics endpoint or tracing yet (PRD §10).
   CSV import/export safety, XSS escaping, rate limiting, the Firestore import mapping, and docs/code consistency.
 * CI (`.github/workflows/ci.yml`): `ruff check` + `ruff format --check`, `pytest` on PostgreSQL, a migration
   round-trip (`upgrade` → `check` → `downgrade base` → `upgrade`), the docs-sync gate on pull requests, and the
-  container image build (pushed to GHCR from `main`).
+  container image build (pushed to GHCR from `main`; the owner name is lower-cased because registry names must be).
 
 ## 12. Migration from Firebase
 
@@ -299,5 +299,6 @@ history).
 
 | Date | Change |
 | --- | --- |
+| 2026-11-07 | CI image job lower-cases the GitHub owner in the GHCR image name (mixed-case owners made the build fail) |
 | 2026-11-07 | Added the AWS reference deployment: `k8s/overlays/aws-k3s` (S3 backup CronJob, extra NetworkPolicies), `k8s/addons/cluster-issuer.yaml`, and a full EC2 + k3s + S3 + DuckDNS runbook in `docs/deployment.md` |
 | 2026-11-06 | Migrated from Firebase to PostgreSQL; restructured into an application factory with blueprints; added CSRF, RBAC, rate limiting, security headers, tests, Docker, Kubernetes manifests, CI, and the docs-sync tooling |

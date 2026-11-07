@@ -211,5 +211,6 @@ Imported users receive random temporary passwords and must change them at first 
 
 | Date | Change |
 | --- | --- |
+| 2026-11-07 | §6: release image build now works for mixed-case GitHub owners (lower-cased registry path) |
 | 2026-11-07 | §6: documented the AWS reference deployment (EC2 + k3s + S3 backups + DuckDNS) |
 | 2026-11-06 | Initial PRD written from the codebase after the PostgreSQL / Kubernetes migration. Documents roles, journeys, requirements AUTH-1…DASH-2, NFRs and roadmap |
