@@ -10,3 +10,4 @@ psycopg[binary]==3.3.8
 gunicorn==26.2.0
 reportlab==5.1.0
 redis==6.4.0
+segno==1.6.6

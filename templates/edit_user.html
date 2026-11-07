@@ -6,6 +6,7 @@
 <div class="mb-3">
   <div><strong>{{ t('username') }}:</strong> {{ u.username }}</div>
   <div><strong>{{ t('email') }}:</strong> {{ u.email or "N/A" }}</div>
+  <div><strong>{{ t('mfa_state') }}:</strong> {{ t('mfa_on') if u.mfa_enabled else t('mfa_off') }}</div>
 </div>
 
 <form method="POST" style="max-width:520px;">
@@ -36,6 +37,13 @@
     <input class="form-control" name="new_password" type="password" autocomplete="new-password" minlength="12">
     <div class="form-text">{{ t('password_hint') }}</div>
   </div>
+
+  {% if u.mfa_enabled %}
+  <div class="form-check mb-3">
+    <input class="form-check-input" type="checkbox" name="reset_mfa" id="reset_mfa">
+    <label class="form-check-label" for="reset_mfa">{{ t('mfa_reset') }}</label>
+  </div>
+  {% endif %}
 
   <button class="btn btn-success">{{ t('save_changes') }}</button>
   <a class="btn btn-secondary" href="{{ url_for('admin.users') }}">{{ t('back') }}</a>

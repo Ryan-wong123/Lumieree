@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 
-from sqlalchemy import JSON, CheckConstraint, ForeignKey, Index, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, CheckConstraint, ForeignKey, Index, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -76,6 +76,12 @@ class User(TimestampMixin, db.Model):
     session_version: Mapped[int] = mapped_column(default=1, nullable=False)
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     last_login_at: Mapped[dt.datetime | None] = mapped_column()
+    # Two-factor authentication (TOTP, RFC 6238). ``mfa_last_step`` blocks re-use of an accepted code;
+    # ``mfa_backup_codes`` holds SHA-256 hashes of one-time recovery codes.
+    totp_secret: Mapped[str | None] = mapped_column(String(64))
+    mfa_enabled: Mapped[bool] = mapped_column(default=False, nullable=False)
+    mfa_last_step: Mapped[int | None] = mapped_column(BigInteger)
+    mfa_backup_codes: Mapped[list] = mapped_column(JSONType, default=list, nullable=False)
 
     created_by: Mapped[User | None] = relationship(remote_side="User.id", lazy="joined")
 
@@ -98,6 +104,34 @@ class User(TimestampMixin, db.Model):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<User {self.username} ({self.role})>"
+
+
+class AuditLog(db.Model):
+    """Append-only record of security-relevant events and access to patient records.
+
+    ``actor_id`` / ``owner_id`` are set to NULL (not cascaded) when a user is deleted so the trail survives;
+    ``actor_username`` keeps the name. The application never updates or deletes rows.
+    """
+
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[dt.datetime] = mapped_column(default=utcnow, nullable=False)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    actor_username: Mapped[str | None] = mapped_column(String(64))
+    # The account (tenant) whose data was touched; lets each clinic read its own trail.
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_type: Mapped[str | None] = mapped_column(String(30))
+    target_id: Mapped[int | None] = mapped_column()
+    detail: Mapped[str | None] = mapped_column(String(255))
+    ip: Mapped[str | None] = mapped_column(String(45))
+
+    __table_args__ = (
+        Index("ix_audit_owner_created", "owner_id", "created_at"),
+        Index("ix_audit_created", "created_at"),
+        Index("ix_audit_action", "action"),
+    )
 
 
 class Medicine(TimestampMixin, OwnedMixin, db.Model):

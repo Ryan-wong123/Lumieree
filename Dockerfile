@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM python:3.13-slim AS builder
+FROM python:3.13-slim@sha256:09a17cad02668ae61ece136b4fd36ac3849e14f670ebedb637ea3e15580525bc AS builder
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build
 COPY requirements.txt .
@@ -9,7 +9,7 @@ RUN --mount=type=secret,id=pip_ca,required=false \
     if [ -f /run/secrets/pip_ca ]; then export PIP_CERT=/run/secrets/pip_ca; fi; \
     python -m venv /opt/venv && /opt/venv/bin/pip install -r requirements.txt
 
-FROM python:3.13-slim AS runtime
+FROM python:3.13-slim@sha256:09a17cad02668ae61ece136b4fd36ac3849e14f670ebedb637ea3e15580525bc AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH" \

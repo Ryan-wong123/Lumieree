@@ -4,7 +4,7 @@
 > user-visible behaviour, roles, permissions, or data handling must update this file in the same change set
 > (see `AGENTS.md`). Technical design lives in [`architecture.md`](architecture.md).
 
-Status: Implemented = in the code today · Planned = not built yet · Last reviewed: 2026-11-07
+Status: Implemented = in the code today · Planned = not built yet · Last reviewed: 2026-11-08
 
 ## 1. Overview
 
@@ -72,6 +72,10 @@ only to the account that created them. Deleting an account deletes all of its da
 | AUTH-6 | Super admin can create (`staff`/`admin`), edit role / e-mail / active flag, reset passwords and delete accounts; cannot disable, demote or delete themselves or the last active super admin |
 | AUTH-7 | The first super admin is created from the CLI (`create-super-admin`) or the idempotent bootstrap (`ensure-super-admin`) |
 | AUTH-8 | `/admin/dashboard` and CSV exports require `admin`; account management requires `super_admin` |
+| AUTH-9 | Any user can turn on two-factor authentication in Settings: scan a QR code (or type the key) into an authenticator app and confirm with a 6-digit code. Sign-in then needs the password **and** a code |
+| AUTH-10 | Each code works once; the second step must be completed within 5 minutes and 5 tries, and is rate limited |
+| AUTH-11 | Turning two-factor on shows 8 one-time recovery codes exactly once; each works once. Turning it off needs the current password and a code (or a recovery code) |
+| AUTH-12 | A super admin can reset another user's two-factor (lost device and codes); the user's other sessions are signed out |
 
 ### 4.2 Patients (Implemented)
 
@@ -82,6 +86,16 @@ only to the account that created them. Deleting an account deletes all of its da
 | PAT-3 | Search by name, contact or NRIC (case-insensitive; wildcard characters are treated literally) |
 | PAT-4 | The list shows each patient's confirmed-visit count |
 | PAT-5 | Deleting a patient deletes their visits; queue history is kept and shown as "Unknown (Deleted)" |
+| PAT-6 | **Export data** on the patient list downloads everything held about one patient (record and all visits, including drafts) as a JSON file, for access requests |
+| PAT-7 | Deleting a patient is the erasure path for deletion requests. Free-text appointment entries are not linked to patients and must be removed separately (see §10) |
+
+### 4.2a Audit log (Implemented)
+
+| ID | Requirement |
+| --- | --- |
+| AUD-1 | The system records sign-ins (success, failure, second-factor failure, recovery-code use), logouts, password / e-mail / two-factor changes, patient view / create / update / export / erase, receipt views and PDFs, CSV exports, and account management, each with who, when, which record and the client IP |
+| AUD-2 | Admins read the log at **Audit Log** (newest first, filter by event prefix, paged). A clinic sees events on its own account; a super admin sees all |
+| AUD-3 | Entries cannot be edited or deleted through the application and survive deletion of the user who caused them. The name typed for an unknown user is never stored |
 
 ### 4.3 Visits and prescriptions (Implemented)
 
@@ -143,7 +157,8 @@ Imported users receive random temporary passwords and must change them at first 
 
 | Area | Requirement | Status |
 | --- | --- | --- |
-| Security | Tenant isolation on every query; CSRF protection; CSP and security headers; no secrets in the repository; production refuses to start with a weak `SECRET_KEY` | Implemented |
+| Security | Tenant isolation on every query; CSRF protection; CSP (no inline scripts without a per-request nonce) and security headers; Subresource Integrity on third-party assets; optional two-factor; audit log; no secrets in the repository; production refuses to start with a weak `SECRET_KEY` | Implemented |
+| Supply chain | CI scans dependencies, the repository and the container image (Trivy) and fails on fixable HIGH/CRITICAL findings; GitHub Actions and base images are pinned; Dependabot proposes weekly updates | Implemented |
 | Privacy | Patient data may include NRIC and medical history. Operators must run the service under applicable law (e.g. Singapore PDPA): TLS everywhere, access limited to authorised accounts, backups encrypted at rest, deletion on request (account deletion removes all data). *This document is not legal advice.* | Partly implemented (see §10) |
 | Availability | Stateless web tier, ≥ 2 replicas, rolling updates with no downtime, PodDisruptionBudget, readiness/liveness probes | Implemented |
 | Performance | Typical page renders < 300 ms for a clinic-sized dataset (thousands of patients); list pages query only the owner's rows through indexes | Target |
@@ -160,6 +175,9 @@ Imported users receive random temporary passwords and must change them at first 
 * Reference production target: a single AWS EC2 instance running k3s, a DuckDNS sub-domain with a Let's Encrypt
   certificate, and nightly database backups to a private encrypted S3 bucket (runbook: `docs/deployment.md`).
   High availability (EKS + RDS, custom domain) is a later step.
+* The AWS reference deployment is operated without an open SSH port (AWS Systems Manager Session Manager), keeps
+  Kubernetes Secrets encrypted at rest, takes daily EBS snapshots, records account activity in CloudTrail and alerts by
+  e-mail when `/healthz` stops answering (details: `docs/deployment.md`).
 * Public deployment needs: a hostname with a TLS certificate, a managed PostgreSQL (or the in-cluster overlay with
   off-cluster backup copies), a `SECRET_KEY`, and the bootstrap admin credentials (see `docs/deployment.md`).
 
@@ -186,6 +204,8 @@ Imported users receive random temporary passwords and must change them at first 
 | Roles | Dashboard/exports restricted to `admin`; user management restricted to `super_admin` |
 | Dead features | The unreachable prescription-creation page and prescription receipt route were removed |
 | Login identifier | Username (previously a Gmail address was synthesised from the typed name) |
+| Two-factor | Optional per account (TOTP app + recovery codes); enforcement for admins is on the roadmap |
+| Admin access to the server | AWS Session Manager instead of SSH; port 22 closed |
 
 ## 10. Known limitations and roadmap
 
@@ -194,9 +214,12 @@ Imported users receive random temporary passwords and must change them at first 
 | Several users per clinic (shared tenant) with per-user roles (physician vs front desk) | High |
 | Per-clinic receipt header and logo (currently per deployment) | High |
 | Batch-aware dispensing (FEFO: first-expiry-first-out across batches, expiry warnings) | High |
-| Audit log of who viewed / changed patient records; data export and erasure tools for patients | High |
-| Multi-factor authentication and password-reset by e-mail | Medium |
-| Stricter CSP (remove inline scripts, add SRI or self-host CDN assets) | Medium |
+| Enforce two-factor for `admin` / `super_admin` accounts; encrypt stored TOTP secrets with a managed key | High |
+| Audit log retention policy and an off-database copy; alerting on repeated failed logins | Medium |
+| Erasure that also removes free-text appointment entries for a patient (appointments are not linked to patients) | Medium |
+| Password reset by e-mail | Medium |
+| Remove `'unsafe-inline'` from `style-src` (move style attributes into the stylesheet); self-host CDN assets | Low |
+| Enable GuardDuty (needs a paid AWS plan) | Medium |
 | Metrics endpoint and tracing; alerting on low stock / expiring batches | Medium |
 | Receipt numbering sequence and stored receipts (currently generated on demand, numbered by timestamp) | Medium |
 | Pagination for very large patient / inventory lists | Low |
@@ -211,6 +234,7 @@ Imported users receive random temporary passwords and must change them at first 
 
 | Date | Change |
 | --- | --- |
+| 2026-11-08 | Security hardening: added AUTH-9…12 (two-factor), PAT-6/7 (patient export and erasure), AUD-1…3 (audit log), supply-chain and CSP/SRI NFRs, AWS operations (Session Manager, snapshots, CloudTrail, uptime alarm); roadmap updated |
 | 2026-11-07 | §6: nightly S3 backup job made reliable on k3s (waits for PostgreSQL before dumping); AWS runbook verified end to end |
 | 2026-11-07 | §6: release image build now works for mixed-case GitHub owners (lower-cased registry path) |
 | 2026-11-07 | §6: documented the AWS reference deployment (EC2 + k3s + S3 backups + DuckDNS) |

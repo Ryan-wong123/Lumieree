@@ -8,8 +8,7 @@
   <div class="input-group">
     <input type="text" name="q" id="search-barcode" class="form-control" placeholder="{{ t('search_placeholder') }}"
       value="{{ request.args.get('q', '') }}">
-    <button type="button" id="search-scan-btn" class="btn btn-outline-primary"
-      onclick="toggleLiveScanner('search-barcode', 'search-form', this)">
+    <button type="button" id="search-scan-btn" class="btn btn-outline-primary">
       <i class="bi bi-camera"></i> {{ t('scan') }}
     </button>
   </div>
@@ -17,9 +16,8 @@
 <!-- CSV Import -->
 <form method="POST" action="/inventory/import_csv" enctype="multipart/form-data" class="d-inline">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" style="display:none"
-    onchange="this.form.submit()" />
-  <button type="button" class="btn btn-outline-secondary mb-3" onclick="document.getElementById('csv_file').click()">
+  <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" style="display:none" data-autosubmit />
+  <button type="button" class="btn btn-outline-secondary mb-3" data-click-target="csv_file">
     <i class="bi bi-file-earmark-arrow-up"></i> {{ t('importcsv') }}
   </button>
 </form>
@@ -67,8 +65,13 @@
 {% endfor %}
 
 <!-- 🔁 Reusable Scanner Script -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+  integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+" crossorigin="anonymous"></script>
+<script nonce="{{ csp_nonce }}">
+  document.getElementById('search-scan-btn').addEventListener('click', function () {
+    toggleLiveScanner('search-barcode', 'search-form', this);
+  });
+
   const html5QrCode = new Html5Qrcode("live-reader");
   const config = {
     fps: 10,
@@ -153,7 +156,5 @@
     }
   }
 </script>
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 
 {% endblock %}

@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h4>{{ t('audit_log') }}</h4>
+<p class="text-muted">{{ t('audit_intro') }}</p>
+
+<form method="GET" class="mb-3" style="max-width:520px;">
+  <div class="input-group">
+    <input type="text" class="form-control" name="action" value="{{ action }}" placeholder="{{ t('audit_filter') }}">
+    <button class="btn btn-outline-secondary" type="submit">{{ t('search') }}</button>
+  </div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>{{ t('audit_time') }}</th>
+        <th>{{ t('audit_user') }}</th>
+        <th>{{ t('audit_action') }}</th>
+        <th>{{ t('audit_target') }}</th>
+        <th>{{ t('audit_detail') }}</th>
+        <th>{{ t('audit_ip') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td class="text-nowrap">{{ e.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        <td>{{ e.actor_username or '—' }}</td>
+        <td><code>{{ e.action }}</code></td>
+        <td>{% if e.target_type %}{{ e.target_type }} #{{ e.target_id }}{% else %}—{% endif %}</td>
+        <td>{{ e.detail or '' }}</td>
+        <td>{{ e.ip or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center text-muted">{{ t('audit_none') }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<nav class="d-flex gap-2">
+  {% if page > 1 %}
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin.audit_log', page=page - 1, action=action) }}">{{ t('audit_prev') }}</a>
+  {% endif %}
+  {% if has_next %}
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin.audit_log', page=page + 1, action=action) }}">{{ t('audit_next') }}</a>
+  {% endif %}
+</nav>
+
+{% endblock %}

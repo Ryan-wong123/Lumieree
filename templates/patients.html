@@ -28,6 +28,7 @@
       <td>
         <a href="/patients/edit/{{ p.id }}" class="btn btn-sm btn-outline-primary">{{ t('edit') }}</a>
         <a href="/patients/{{ p.id }}/visits" class="btn btn-sm btn-outline-secondary">{{ t('visits') }}</a>
+        <a href="{{ url_for('patients.export_patient', patient_id=p.id) }}" class="btn btn-sm btn-outline-dark">{{ t('export_data') }}</a>
       </td>
     </tr>
     {% else %}

@@ -409,12 +409,96 @@ Delete the DuckDNS domain on duckdns.org if you no longer need it.
 ## 15. Hardening checklist
 
 - [ ] Old Firebase key revoked; repository history cleaned if public
-- [ ] SSH restricted to your IP (re-run the `authorize`/`revoke` commands if your IP changes); port 6443 closed
+- [x] Port 22 closed and admin access through Session Manager (§16.2); port 6443 closed
+- [x] Kubernetes Secrets encrypted at rest (§16.1), daily EBS snapshots (§16.3), CloudTrail (§16.4), uptime alarm (§16.5)
+- [ ] Two-factor turned on for every `admin` / `super_admin` account (Settings → Two-factor authentication)
 - [ ] `SECRET_KEY` random (≥ 32 chars), bootstrap password long and changed after first login
 - [ ] HTTPS works and HTTP redirects; `SESSION_COOKIE_SECURE=true` (already in the ConfigMap)
 - [ ] Backups verified by a real restore; bucket private, versioned, encrypted, TLS-only
 - [ ] Image tag is a git SHA (not `latest`); OS and k3s kept patched
 - [ ] Only the backup pod can reach the instance metadata service (NetworkPolicies in `k8s/`)
+
+---
+
+## 16. Security operations (executed and verified on 2026-11-08)
+
+Run from AWS CloudShell (`$INSTANCE_ID`, `$SG_ID`, `$BUCKET` as in §1 / §4; account id `$A`).
+
+**16.1 Encrypt Kubernetes Secrets at rest** (k3s stores them unencrypted by default). Brief API pause; pods keep serving.
+
+```bash
+echo "secrets-encryption: true" | sudo tee -a /etc/rancher/k3s/config.yaml   # on the instance
+sudo systemctl restart k3s && sleep 45
+sudo k3s secrets-encrypt rotate-keys                  # re-encrypts existing Secrets
+sudo k3s secrets-encrypt status                       # Encryption Status: Enabled, reencrypt_finished
+```
+
+**16.2 Admin access with Session Manager, then close port 22.** Attach the policy, wait for registration (restart the
+agent if it keeps logging `AccessDenied` for a few minutes after the policy was attached: `sudo snap restart amazon-ssm-agent`),
+prove a command works, then remove the SSH rule.
+
+```bash
+aws iam attach-role-policy --role-name ${APP}-ec2 --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+aws ssm describe-instance-information --query 'InstanceInformationList[].[InstanceId,PingStatus]' --output text   # Online
+CID=$(aws ssm send-command --instance-ids $INSTANCE_ID --document-name AWS-RunShellScript \
+  --parameters 'commands=["KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl -n lumieree get pods"]' --query Command.CommandId --output text)
+aws ssm get-command-invocation --command-id $CID --instance-id $INSTANCE_ID --query '[Status,StandardOutputContent]' --output text
+for c in $(aws ec2 describe-security-groups --group-ids $SG_ID --query 'SecurityGroups[0].IpPermissions[?FromPort==`22`].IpRanges[].CidrIp' --output text); do
+  aws ec2 revoke-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr $c; done
+```
+
+Interactive shell: AWS console → Systems Manager → Session Manager → Start session (or the EC2 console "Connect" →
+Session Manager). `kubectl` on the instance needs `KUBECONFIG=/etc/rancher/k3s/k3s.yaml` (run as root) or a copy of that file.
+To use SSH again temporarily, authorize port 22 from your current IP and revoke it afterwards. Note that the backup pod can
+reach the instance role through IMDS, so the role now also holds the Session Manager permissions.
+
+**16.3 Daily EBS snapshots (Data Lifecycle Manager), 7 kept.**
+
+```bash
+VOL=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId' --output text)
+aws ec2 create-tags --resources $VOL --tags Key=Backup,Value=lumieree-daily
+aws dlm create-default-role --resource-type snapshot
+aws dlm create-lifecycle-policy --description 'lumieree daily EBS snapshots' --state ENABLED \
+  --execution-role-arn arn:aws:iam::$A:role/AWSDataLifecycleManagerDefaultRole \
+  --policy-details '{"PolicyType":"EBS_SNAPSHOT_MANAGEMENT","ResourceTypes":["VOLUME"],"TargetTags":[{"Key":"Backup","Value":"lumieree-daily"}],"Schedules":[{"Name":"daily","CreateRule":{"Interval":24,"IntervalUnit":"HOURS","Times":["19:00"]},"RetainRule":{"Count":7},"CopyTags":true}]}'
+```
+
+(19:00 UTC = 03:00 Singapore.) **Restore rehearsal (done):** download the newest `postgres/*.dump` from S3, copy it into
+`postgres-0`, `create database restore_test`, `pg_restore --no-owner -d restore_test`, check row counts, `drop database restore_test`.
+
+**16.4 CloudTrail** (management events, all regions, log-file validation, private encrypted bucket):
+
+```bash
+TB=lumieree-cloudtrail-$A
+aws s3api create-bucket --bucket $TB --region $AWS_REGION --create-bucket-configuration LocationConstraint=$AWS_REGION
+aws s3api put-public-access-block --bucket $TB --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+aws s3api put-bucket-encryption --bucket $TB --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+# bucket policy: allow cloudtrail.amazonaws.com s3:GetBucketAcl on the bucket and s3:PutObject on AWSLogs/$A/* (bucket-owner-full-control); deny non-TLS
+aws cloudtrail create-trail --name lumieree-trail --s3-bucket-name $TB --is-multi-region-trail --enable-log-file-validation
+aws cloudtrail start-logging --name lumieree-trail
+```
+
+GuardDuty is **not** enabled: on the AWS Free plan `aws guardduty list-detectors` fails with `SubscriptionRequiredException`.
+After upgrading the plan run `aws guardduty create-detector --enable`.
+
+**16.5 Uptime alarm** (Route 53 health checks publish to CloudWatch in `us-east-1`):
+
+```bash
+R=us-east-1
+TOPIC=$(aws sns create-topic --name lumieree-alerts --region $R --query TopicArn --output text)
+aws sns subscribe --topic-arn $TOPIC --protocol email --notification-endpoint you@example.com --region $R   # click the confirmation e-mail
+HC=$(aws route53 create-health-check --caller-reference lumieree-$(date +%s) --query HealthCheck.Id --output text \
+  --health-check-config '{"Type":"HTTPS","FullyQualifiedDomainName":"NAME.duckdns.org","Port":443,"ResourcePath":"/healthz","RequestInterval":30,"FailureThreshold":3,"EnableSNI":true}')
+aws cloudwatch put-metric-alarm --region $R --alarm-name lumieree-down --namespace AWS/Route53 --metric-name HealthCheckStatus \
+  --dimensions Name=HealthCheckId,Value=$HC --statistic Minimum --period 60 --evaluation-periods 2 --threshold 1 \
+  --comparison-operator LessThanThreshold --alarm-actions $TOPIC --ok-actions $TOPIC --treat-missing-data breaching
+```
+
+The subscription stays "pending confirmation" (no alerts) until the e-mail link is clicked. Failed-login monitoring is done
+in the application: **Audit Log** page, filter `auth.login_failed`.
+
+**Teardown additions** (§14): delete the DLM policy and its snapshots, the CloudTrail trail and bucket, the health check,
+alarm and SNS topic, and detach `AmazonSSMManagedInstanceCore` before deleting the role.
 
 ---
 

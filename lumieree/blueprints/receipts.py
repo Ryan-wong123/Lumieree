@@ -18,6 +18,7 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
+from .. import audit
 from ..auth import current_uid
 from ..extensions import db
 from ..models import QueueItem, Visit
@@ -105,6 +106,7 @@ def queue_receipt(queue_id: int):
     if data["patient"] is None:
         flash("❌ Patient not found.")
         return redirect(url_for("front_desk.front_desk"))
+    audit.record("receipt.view", target_type="patient", target_id=queue.patient_id)
     return render_template(
         "receipts.html",
         patient=data["patient"],
@@ -132,6 +134,7 @@ def generate_receipt_pdf():
     data = _build_receipt(queue)
     if data["patient"] is None:
         abort(404)
+    audit.record("receipt.pdf", target_type="patient", target_id=queue.patient_id)
 
     # Which lines did the user tick? (Only inclusion flags come from the browser.)
     include_meds = request.form.get("use_meds_master", "1") == "1" and bool(data["items"])

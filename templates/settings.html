@@ -18,6 +18,39 @@
   <button class="btn btn-success mb-3">{{ t('update_account') }}</button>
 </form>
 
+<hr style="max-width:520px;">
+
+<h5>{{ t('mfa_title') }}</h5>
+{% if current_user.mfa_enabled %}
+<p class="text-success">{{ t('mfa_is_on') }}</p>
+<form method="POST" action="{{ url_for('auth.mfa_disable') }}" style="max-width:520px;" class="mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-text mb-2">{{ t('mfa_off_hint') }}</div>
+  <input name="current_password" type="password" class="form-control mb-2" autocomplete="current-password"
+    placeholder="{{ t('current_password') }}" required>
+  <input name="code" type="text" class="form-control mb-2" inputmode="numeric" autocomplete="one-time-code"
+    placeholder="{{ t('mfa_code') }}" required>
+  <button class="btn btn-outline-danger">{{ t('mfa_turn_off') }}</button>
+</form>
+{% elif mfa_secret %}
+<p>{{ t('mfa_scan') }}</p>
+<img src="{{ mfa_qr }}" alt="QR code" width="200" height="200" class="mb-2 border">
+<div class="mb-3"><code>{{ mfa_secret }}</code></div>
+<form method="POST" action="{{ url_for('auth.mfa_enable') }}" style="max-width:520px;" class="mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="form-label" for="mfa-code">{{ t('mfa_enter_code') }}</label>
+  <input id="mfa-code" name="code" type="text" class="form-control mb-2" inputmode="numeric"
+    autocomplete="one-time-code" maxlength="10" required>
+  <button class="btn btn-success">{{ t('mfa_turn_on') }}</button>
+</form>
+{% else %}
+<p class="text-muted">{{ t('mfa_intro') }}</p>
+<form method="POST" action="{{ url_for('auth.mfa_start') }}" class="mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="btn btn-outline-primary">{{ t('mfa_setup') }}</button>
+</form>
+{% endif %}
+
 <!-- Logout Button -->
 <a href="{{ url_for('auth.logout') }}" class="btn btn-danger">
   {{ t('logout') }}
