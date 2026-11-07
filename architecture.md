@@ -366,6 +366,7 @@ history).
 
 | Date | Change |
 | --- | --- |
+| 2026-11-09 | CI actions updated (still pinned to commit SHAs): checkout 7.0.1, setup-python 7.1.0, docker login 4.7.0, build-push 7.4.0, setup-buildx 4.4.1 (applied as one grouped change instead of five Dependabot PRs that would conflict and deploy five times) |
 | 2026-11-08 | SSM deploy document uses `sh`-compatible `set -eu` (the first automatic deploy attempt failed on `set -o pipefail` before changing anything; fixed in AWS and in `deploy/ssm-document.json`, with a test); first automatic deploy of `1f688e2` succeeded |
 | 2026-11-08 | Continuous deployment: `deploy` job in `ci.yml` (OIDC role `lumieree-github-deploy`, SSM document `lumieree-deploy`), `deploy/deploy.sh` (migrate, roll out, verify image, smoke test, automatic rollback), post-deploy smoke test from the runner, `tests/test_deploy_config.py`; runbook §13 / §17 |
 | 2026-11-08 | Fixed the `images:` override in `overlays/production` and `overlays/aws-k3s` (it matched `lumieree`, which the base had already renamed, so the pinned tag was ignored and pods ran `:latest`); runbook verifies the running image |
