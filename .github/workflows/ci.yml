@@ -139,7 +139,7 @@ jobs:
         run: |
           . deploy/site.env
           echo "SITE=https://$SITE_HOST" >> "$GITHUB_ENV"
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: arn:aws:iam::388033185694:role/lumieree-github-deploy
           aws-region: ${{ env.AWS_REGION }}
