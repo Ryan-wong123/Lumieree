@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from flask import g, request
+from flask import g, has_request_context, request
 
 from .extensions import db
 from .models import AuditLog, User
@@ -34,7 +34,7 @@ def record(
         target_type=target_type,
         target_id=target_id,
         detail=clean(detail, 255) or None,
-        ip=clean(request.remote_addr, 45) or None,
+        ip=(clean(request.remote_addr, 45) or None) if has_request_context() else None,
     )
     db.session.add(entry)
     if commit:

@@ -12,7 +12,7 @@ from sqlalchemy import func, or_
 from .. import audit
 from ..auth import current_uid
 from ..extensions import db
-from ..models import CONDITION_FIELDS, Medicine, Patient, QueueItem, Visit
+from ..models import CONDITION_FIELDS, Appointment, Medicine, Patient, QueueItem, Visit
 from ..translations import SERVICE_CATALOG
 from ..utils import ValidationError, clean, parse_date, to_decimal, to_int, today
 
@@ -124,6 +124,19 @@ def edit_patient(patient_id: int):
     return render_template("edit_patient.html", patient=patient.to_dict())
 
 
+def _delete_appointments_for(patient: Patient) -> int:
+    """Erase the patient's appointment entries too. Appointments are free text and not linked to patients, so they are
+    matched by name (case-insensitive) and, when both sides have a contact number, by that number."""
+    conditions = [
+        Appointment.owner_id == current_uid(),
+        func.lower(func.trim(Appointment.patient_name)) == (patient.name or "").strip().lower(),
+    ]
+    contact = (patient.contact or "").strip()
+    if contact:
+        conditions.append(or_(Appointment.contact.is_(None), Appointment.contact == "", Appointment.contact == contact))
+    return db.session.execute(db.delete(Appointment).where(*conditions)).rowcount or 0
+
+
 @bp.post("/patients/delete/<int:patient_id>")
 def delete_patient(patient_id: int):
     patient = Patient.get_owned(current_uid(), patient_id)
@@ -131,10 +144,16 @@ def delete_patient(patient_id: int):
         flash("❌ Patient not found.")
     else:
         patient_id = patient.id
+        removed = _delete_appointments_for(patient)
         db.session.delete(patient)  # visits cascade; queue rows keep history with patient_id NULL
         db.session.commit()
-        audit.record("patient.delete", target_type="patient", target_id=patient_id, detail="erased with visits")
-        flash("✅ Patient and their visit records deleted.")
+        audit.record(
+            "patient.delete",
+            target_type="patient",
+            target_id=patient_id,
+            detail=f"erased with visits and {removed} appointment entries",
+        )
+        flash(f"✅ Patient, their visit records and {removed} appointment entries deleted.")
     return redirect(url_for("patients.list_patients"))
 
 

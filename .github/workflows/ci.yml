@@ -71,7 +71,6 @@ jobs:
         with:
           scan-type: fs
           scanners: vuln,secret,misconfig
-          trivyignores: .trivyignore.yaml
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
@@ -134,8 +133,12 @@ jobs:
     env:
       AWS_REGION: ap-southeast-1
       INSTANCE_ID: i-0023c4e58b28c1430
-      SITE: https://lumieree.duckdns.org
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read the site hostname
+        run: |
+          . deploy/site.env
+          echo "SITE=https://$SITE_HOST" >> "$GITHUB_ENV"
       - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           role-to-assume: arn:aws:iam::388033185694:role/lumieree-github-deploy

@@ -52,3 +52,40 @@ spec:
             except: [169.254.169.254/32]
       ports:
         - {protocol: TCP, port: 443}
+---
+# 3) The failed-login alert pod: DNS, PostgreSQL (read the audit log), the instance metadata service for IAM-role
+#    credentials, and HTTPS to the SNS endpoint. Nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: alert
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: alert
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32
+      ports:
+        - {protocol: TCP, port: 80}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [169.254.169.254/32]
+      ports:
+        - {protocol: TCP, port: 443}

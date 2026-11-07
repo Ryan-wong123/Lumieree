@@ -66,3 +66,40 @@ def test_overlays_override_the_full_image_name():
         images = text[text.index("\nimages:") :].split("\npatches:")[0]
         assert re.search(r"-\s+name:\s+ghcr\.io/ryan-wong123/lumieree\s*$", images, flags=re.M), overlay
         assert not re.search(r"-\s+name:\s+lumieree\s*$", images, flags=re.M), overlay
+
+
+def test_site_hostname_has_a_single_source():
+    site = (ROOT / "deploy" / "site.env").read_text(encoding="utf-8")
+    host = re.search(r"^SITE_HOST=(\S+)$", site, flags=re.M).group(1)
+    assert re.fullmatch(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?", host)
+    for path in (
+        ROOT / ".github" / "workflows" / "ci.yml",
+        ROOT / ".github" / "workflows" / "zap-baseline.yml",
+        SCRIPT,
+    ):
+        assert host not in path.read_text(encoding="utf-8"), (
+            f"{path.name} hard-codes the hostname; read deploy/site.env"
+        )
+    assert "site.env" in SCRIPT.read_text(encoding="utf-8")
+    assert "deploy/site.env text eol=lf" in (ROOT / ".gitattributes").read_text(encoding="utf-8")
+
+
+def test_rollback_drill_never_touches_the_real_namespace():
+    text = (ROOT / "deploy" / "rollback-drill.sh").read_text(encoding="utf-8")
+    assert "NS=rollback-drill" in text
+    assert "lumieree-web" not in text and "-n lumieree" not in text and "DEPLOY_NAMESPACE" not in text
+    assert "rollout undo" in text and "DRILL_PASSED" in text
+
+
+def test_postgres_pod_is_read_only_and_the_alert_job_is_wired_in():
+    postgres = (ROOT / "k8s" / "overlays" / "in-cluster-postgres" / "postgres.yaml").read_text(encoding="utf-8")
+    assert "readOnlyRootFilesystem: true" in postgres
+    assert "mountPath: /tmp" in postgres and "mountPath: /var/run/postgresql" in postgres
+    assert "component: alert" in postgres  # the alert pod may reach PostgreSQL
+    overlay = ROOT / "k8s" / "overlays" / "aws-k3s"
+    assert "failed-login-alert.yaml" in (overlay / "kustomization.yaml").read_text(encoding="utf-8")
+    assert "name: alert" in (overlay / "networkpolicy-extra.yaml").read_text(encoding="utf-8")
+    job = (overlay / "failed-login-alert.yaml").read_text(encoding="utf-8")
+    assert 'schedule: "*/5 * * * *"' in job and "ALERT_THRESHOLD" in job and "auth.login_failed" in job
+    assert "component: alert" in job and "readOnlyRootFilesystem: true" in job
+    assert not (ROOT / ".trivyignore.yaml").exists()  # the read-only exception is gone, nothing replaced it
