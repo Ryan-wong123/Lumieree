@@ -25,10 +25,14 @@ flowchart LR
     BK -->|IAM instance role, HTTPS| S3[(S3 backup bucket)]
 ```
 
-> **Status of this guide.** The Kubernetes manifests are validated against the Kubernetes 1.31 schema and the app
-> was tested with Docker Compose, but the AWS and k3s commands below were written without access to a live AWS
-> account and have **not been executed end to end**. Expect to correct small details (versions, flags). If you do,
-> fix this file in the same change (see `AGENTS.md`).
+> **Status of this guide.** Executed end to end on 2026-11-07 (AWS CloudShell as the deploy shell, `ap-southeast-1`).
+> Corrections found on the way are marked "Tested note" below. Expect further small differences (versions, flags);
+> if you find one, fix this file in the same change (see `AGENTS.md`).
+
+> **Tested note – AWS Free plan.** New accounts on the Free plan cannot launch `t3.medium`
+> (`InvalidParameterCombination … not eligible for Free Tier`). List eligible types with
+> `aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true`; `c7i-flex.large` (2 vCPU, 4 GiB,
+> amd64) has the same size as `t3.medium` and worked. Upgrading the account plan is the alternative.
 
 **Trade-offs of this design (be aware):** a single EC2 node is a single point of failure (no HA; recovery = rebuild
 from this guide + restore from S3); DuckDNS is a free third-party service without an SLA; k3s upgrades and OS
@@ -278,7 +282,7 @@ Put the clinic's receipt header in `k8s/base/configmap.yaml` (`CLINIC_NAME`, `CL
 ## 10. Point the overlay at your domain and image, then deploy
 
 ```bash
-TAG=<the image tag from §6>
+TAG=<the image tag from §6>     # CI tags images with the FULL 40-character commit SHA (github.sha), not the short form
 sed -i "s/CHANGE-ME.duckdns.org/${DUCK_SUBDOMAIN}.duckdns.org/g" k8s/overlays/aws-k3s/kustomization.yaml
 sed -i "s#newTag: latest#newTag: ${TAG}#" k8s/overlays/aws-k3s/kustomization.yaml
 
