@@ -4,6 +4,11 @@ updates:
     directory: "/"
     schedule: {interval: weekly}
     open-pull-requests-limit: 5
+    ignore:
+      # Flask-Limiter's `limits` package declares support for redis < 8 only, and production rate limiting runs on
+      # Redis. Revisit when `limits` supports redis 8 (tests/test_ratelimit_redis.py checks the combination in CI).
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule: {interval: weekly}

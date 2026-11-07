@@ -309,7 +309,8 @@ endpoint or tracing yet (PRD §10).
   authentication, authorization, tenant isolation (IDOR, mass assignment), dispensing/stock invariants, receipts,
   CSV import/export safety, XSS escaping, rate limiting, two-factor login (replay, lock-out, recovery codes, reset),
   the audit log, CSP nonce / SRI, patient export and erasure, the Firestore import mapping, and docs/code consistency.
-* CI (`.github/workflows/ci.yml`): `ruff check` + `ruff format --check`, `pytest` on PostgreSQL, a migration
+* CI (`.github/workflows/ci.yml`): `ruff check` + `ruff format --check`, `pytest` on PostgreSQL **and a Redis service**
+  (`tests/test_ratelimit_redis.py` proves the Redis-backed login rate limit with the real client), a migration
   round-trip (`upgrade` → `check` → `downgrade base` → `upgrade`), the docs-sync gate on pull requests, a Trivy
   filesystem scan (dependencies, secrets, Dockerfile / Kubernetes misconfiguration; fails on fixable HIGH/CRITICAL;
   reviewed exceptions live in `.trivyignore.yaml`, each with a reason),
@@ -358,6 +359,7 @@ history).
 | Deploy script lives in the repo and runs from the commit being deployed | One reviewed source of truth; no unmanaged script on the server. Trade-off: whoever can merge to `main` can change what runs as the deploy, hence branch protection |
 | Migrate first, then roll out, auto-rollback on failure | Migrations are expand-only so the old version keeps working; if the new version fails its rollout or smoke test, `rollout undo` restores the previous revision (the new schema stays, which the old version tolerates) |
 | Every merge to `main` deploys, no manual approval gate | Requested; the safety net is required checks, the smoke test and automatic rollback. A GitHub `production` environment with required reviewers can be added later without changing the pipeline |
+| `redis` client held below 8 (7.4.1); Dependabot ignores its major updates | Flask-Limiter's `limits` package declares `redis<8`, and production rate limiting runs on Redis, so an unsupported client could break login with errors. A real-Redis CI test guards the combination |
 | Trivy exception KSV-0014 for the in-cluster PostgreSQL StatefulSet | A read-only root filesystem needs extra `emptyDir` mounts for the socket directory and `/tmp`; changing the live database pod without a tested manifest was judged riskier than the finding. Scoped to that one file in `.trivyignore.yaml` and tracked in PRD §10 |
 | Session Manager instead of SSH, port 22 closed | Removes the internet-reachable admin port and the moving-IP allow-list; access is controlled by IAM and logged by CloudTrail |
 | GuardDuty not enabled | Requires a paid AWS account plan (the Free plan returns `SubscriptionRequiredException`); revisit after upgrading |
@@ -367,6 +369,7 @@ history).
 | Date | Change |
 | --- | --- |
 | 2026-11-09 | CI actions updated (still pinned to commit SHAs): checkout 7.0.1, setup-python 7.1.0, docker login 4.7.0, build-push 7.4.0, setup-buildx 4.4.1 (applied as one grouped change instead of five Dependabot PRs that would conflict and deploy five times) |
+| 2026-11-09 | Python libraries updated: Flask-Limiter 4.1.1, SQLAlchemy 2.1.8, redis 7.4.1 (Dependabot's redis 8.1.0 rejected: outside the range `limits` supports), firebase-admin >=7.7.0 for the one-off import; CI gains a Redis service and a real-Redis rate-limit test; Dependabot ignores redis major updates |
 | 2026-11-08 | SSM deploy document uses `sh`-compatible `set -eu` (the first automatic deploy attempt failed on `set -o pipefail` before changing anything; fixed in AWS and in `deploy/ssm-document.json`, with a test); first automatic deploy of `1f688e2` succeeded |
 | 2026-11-08 | Continuous deployment: `deploy` job in `ci.yml` (OIDC role `lumieree-github-deploy`, SSM document `lumieree-deploy`), `deploy/deploy.sh` (migrate, roll out, verify image, smoke test, automatic rollback), post-deploy smoke test from the runner, `tests/test_deploy_config.py`; runbook §13 / §17 |
 | 2026-11-08 | Fixed the `images:` override in `overlays/production` and `overlays/aws-k3s` (it matched `lumieree`, which the base had already renamed, so the pinned tag was ignored and pods ran `:latest`); runbook verifies the running image |
