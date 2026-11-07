@@ -4,7 +4,7 @@
 > configuration, dependencies, or deployment must update this file in the same change set (see `AGENTS.md`).
 > `tests/test_docs.py` fails if a route, table, or environment variable is missing from the sections below.
 
-Last reviewed: 2026-11-07 · Product requirements: [`PRD.md`](PRD.md)
+Last reviewed: 2026-11-08 · Product requirements: [`PRD.md`](PRD.md)
 
 ## 1. System context
 
@@ -35,24 +35,26 @@ every query is scoped to the logged-in account. Super admins manage accounts but
 | Language / framework | Python 3.13, Flask 3.1 (application factory + blueprints) |
 | Database | PostgreSQL 16 via SQLAlchemy 2.0 (`Mapped[]` style) and psycopg 3; Flask-SQLAlchemy 3.1 |
 | Migrations | Alembic through Flask-Migrate (`migrations/`) |
-| Auth | Server-side accounts in PostgreSQL, Werkzeug scrypt password hashes, signed cookie session |
+| Auth | Server-side accounts in PostgreSQL, Werkzeug scrypt password hashes, signed cookie session, optional TOTP two-factor (RFC 6238, stdlib; QR codes via `segno`) |
 | CSRF / rate limiting | Flask-WTF `CSRFProtect`; Flask-Limiter (memory or Redis storage) |
 | PDF receipts | ReportLab (CJK via bundled CID font `STSong-Light`, or Noto Sans CJK when `FONT_DIR` provides it) |
 | Front end | Jinja2 templates, Bootstrap 5.3 (CDN), FullCalendar 6 (CDN), html5-qrcode (CDN) |
 | Serving | gunicorn (3 workers × 2 threads by default), non-root container, port 8080 |
 | Packaging / deploy | Docker multi-stage image, docker-compose (local), Kubernetes manifests with kustomize |
-| Quality | pytest (SQLite by default, PostgreSQL in CI), ruff, GitHub Actions |
+| Quality | pytest (SQLite by default, PostgreSQL in CI), ruff, GitHub Actions (actions pinned to commit SHAs), Trivy scans, Dependabot |
 
 ## 3. Repository layout
 
 ```
 wsgi.py                      WSGI entrypoint (gunicorn wsgi:app, flask --app wsgi)
 lumieree/
-  __init__.py                create_app(): config, proxy fix, extensions, blueprints, headers, error handlers
+  __init__.py                create_app(): config, proxy fix, extensions, blueprints, CSP nonce + headers, error handlers
   config.py                  Environment-driven Config / TestingConfig and production safety checks
   extensions.py              db, migrate, csrf, limiter singletons (timestamptz type map)
   models.py                  SQLAlchemy models + tenant-scoping helpers
-  auth.py                    Login/logout/settings, session loading, role decorators, user creation/validation
+  auth.py                    Login (+ second factor), logout, settings, MFA setup/disable, session loading, role decorators, user creation/validation
+  audit.py                   record(): append-only audit trail (who, what, which record, from which IP)
+  mfa.py                     TOTP (RFC 6238) and single-use recovery codes, standard library only
   i18n.py, translations.py   en/zh language switch, t() helper, UI strings, service catalog
   utils.py                   Parsing/validation helpers, CSV formula guard, safe-redirect check
   cli.py                     flask create-super-admin | ensure-super-admin | import-firestore
@@ -60,17 +62,19 @@ lumieree/
   blueprints/
     health.py                /healthz, /readyz
     inventory.py             Medicines CRUD, stock adjustment, CSV import
-    patients.py              Patients CRUD and visits (drafts, confirmation, queue hand-off)
+    patients.py              Patients CRUD, visits (drafts, confirmation, queue hand-off), per-patient JSON export
     front_desk.py            Dispensing queue: complete (deduct stock) / void (restore stock)
     receipts.py              Receipt page and server-priced PDF
     appointments.py          Day-by-day appointment grid and calendar counts
-    admin.py                 Dashboard, CSV exports, super-admin user management
+    admin.py                 Dashboard, CSV exports, audit log viewer, super-admin user management (incl. 2FA reset)
 templates/                   Jinja2 pages (layout.html + one template per page, error.html)
 migrations/                  Alembic environment and versions/
-tests/                       pytest suite (auth, authorization, tenant isolation, features, legacy import, docs)
+tests/                       pytest suite (auth, authorization, tenant isolation, features, security hardening, legacy import, docs)
 k8s/base, k8s/overlays/, k8s/addons/  Kubernetes manifests: base, overlays (production, in-cluster-postgres, aws-k3s), cert-manager issuers (section 9)
 scripts/check_docs_updated.py  Docs-sync gate used by CI, git hook and the Claude Code Stop hook
-.github/workflows/ci.yml     Lint, tests (PostgreSQL), migration round-trip, docs gate, image build
+.github/workflows/ci.yml     Lint, tests (PostgreSQL), migration round-trip, docs gate, Trivy (repo + image), image build
+.github/dependabot.yml       Weekly update PRs for pip, GitHub Actions and Docker base images
+.github/workflows/zap-baseline.yml  Manual passive OWASP ZAP scan of the production site (report attached to the run)
 Dockerfile, docker-compose.yml, .dockerignore
 ```
 
@@ -81,14 +85,16 @@ Dockerfile, docker-compose.yml, .dockerignore
 3. `auth._load_user` reads `uid` and `sv` from the signed session, loads the `User` row **on every request** and
    accepts it only if the account is `active` and `users.session_version == session["sv"]`. Anything else clears the
    session. Endpoints outside `OPEN_ENDPOINTS` redirect to `/login`; accounts flagged `must_change_password` are
-   confined to `/settings` and `/logout`.
+   confined to `/settings` and `/logout`. If an account has two-factor on, a correct password only parks the login
+   (`mfa_uid`, 5-minute expiry, 5 tries) until `/login/mfa` accepts a TOTP or recovery code; only then is `uid` set.
 4. **CSRF** (Flask-WTF) validates the token on every non-safe method. Forms carry `csrf_token`; `fetch` calls send
    `X-CSRFToken` read from `<meta name="csrf-token">`.
-5. **Rate limiting** applies to `POST /login` (`LOGIN_RATE_LIMIT`).
+5. **Rate limiting** applies to `POST /login`, `POST /login/mfa` and the MFA enable/disable routes (`LOGIN_RATE_LIMIT`).
 6. The view runs. Role checks use `@admin_required` / `@super_admin_required`; data access always goes through
    `Model.owned_by(owner_id)` / `Model.get_owned(owner_id, id)`.
-7. `after_request` adds security headers (CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`,
-   `Permissions-Policy`, HSTS in production, `Cache-Control: no-store` for non-static responses).
+7. `after_request` adds security headers (CSP with a per-request nonce, `X-Frame-Options: DENY`, `nosniff`,
+   `Referrer-Policy`, `Permissions-Policy`, HSTS in production, `Cache-Control: no-store` for non-static responses).
+   A first `before_request` hook creates the nonce; templates put it on every inline `<script nonce="{{ csp_nonce }}">`.
 8. Error handlers render `error.html` (or JSON for `/api/*` and the appointment JSON endpoints); unhandled
    exceptions are logged and return a generic 500 without internals.
 
@@ -99,17 +105,22 @@ All routes except those marked *public* require a logged-in, active account. `PO
 | Route | Methods | Access | Purpose |
 | --- | --- | --- | --- |
 | `/` | GET | user | Redirect to the patient list |
-| `/login` | GET, POST | public | Sign in (rate limited, generic error message) |
+| `/login` | GET, POST | public | Sign in (rate limited, generic error message; audited) |
+| `/login/mfa` | GET, POST | public | Second step for accounts with two-factor: TOTP or one-time recovery code (needs a pending password step) |
 | `/logout` | GET | public | Clear the session |
-| `/settings` | GET, POST | user | Change own e-mail / password (current password required) |
+| `/settings` | GET, POST | user | Change own e-mail / password (current password required); two-factor status and set-up |
+| `/settings/mfa/start` | POST | user | Begin two-factor set-up (new secret kept in the session until confirmed) |
+| `/settings/mfa/enable` | POST | user | Confirm with a code, turn two-factor on, show recovery codes once |
+| `/settings/mfa/disable` | POST | user | Turn two-factor off (needs current password and a code) |
 | `/switch_language` | POST | public | Toggle English / Chinese; `next` must be a relative path |
 | `/healthz` | GET | public | Liveness probe |
 | `/readyz` | GET | public | Readiness probe (checks the database) |
 | `/patients` | GET | user | List / search patients (name, contact, NRIC) |
 | `/patients/add` | GET, POST | user | Create patient |
 | `/patients/edit/<int:patient_id>` | GET, POST | user | Edit patient (whitelisted fields) |
-| `/patients/delete/<int:patient_id>` | POST | user | Delete patient and their visits |
-| `/patients/<int:patient_id>/visits` | GET, POST | user | Visit history; save draft / confirm visit |
+| `/patients/delete/<int:patient_id>` | POST | user | Erase patient and their visits (audited) |
+| `/patients/<int:patient_id>/export.json` | GET | user | Download everything held about one patient (record + visits) as JSON (audited) |
+| `/patients/<int:patient_id>/visits` | GET, POST | user | Visit history (view is audited); save draft / confirm visit |
 | `/inventory` | GET | user | List / search medicines |
 | `/inventory/add` | GET, POST | user | Create medicine |
 | `/inventory/edit/<int:medicine_id>` | GET, POST | user | Edit medicine |
@@ -131,9 +142,10 @@ All routes except those marked *public* require a logged-in, active account. `PO
 | `/admin/dashboard` | GET | admin | Counts, visits in a date range, low stock, recent orders |
 | `/admin/export/visits.csv` | GET | admin | Visits export (formula-safe) |
 | `/admin/export/queue.csv` | GET | admin | Queue export (formula-safe) |
+| `/admin/audit` | GET | admin | Audit log, newest first, filter by event prefix, paged; a clinic sees its own account, a super admin sees all |
 | `/admin/users` | GET | super admin | Account list |
 | `/admin/users/create` | GET, POST | super admin | Create `staff`/`admin` account (temporary password) |
-| `/admin/users/<int:uid>/edit` | GET, POST | super admin | Role, active flag, e-mail, reset password |
+| `/admin/users/<int:uid>/edit` | GET, POST | super admin | Role, active flag, e-mail, reset password, reset two-factor |
 | `/admin/users/<int:uid>/delete` | POST | super admin | Delete account and all of its data |
 | `/static/<path:filename>` | GET | public | Static files |
 
@@ -150,6 +162,7 @@ erDiagram
     users ||--o{ front_desk_queue : owns
     users ||--o{ appointments : owns
     users |o--o{ users : created_by
+    users |o--o{ audit_log : "actor / owner, SET NULL on delete"
     patients ||--o{ visits : has
     patients |o--o{ front_desk_queue : "SET NULL on delete"
     visits |o--o{ front_desk_queue : "SET NULL on delete"
@@ -157,7 +170,8 @@ erDiagram
 
 | Table | Key columns / notes |
 | --- | --- |
-| `users` | `username` (unique, lower-case), `email` (unique, optional), `password_hash` (scrypt), `role` ∈ {`staff`,`admin`,`super_admin`}, `active`, `must_change_password`, `session_version`, `created_by_id`, `last_login_at` |
+| `users` | `username` (unique, lower-case), `email` (unique, optional), `password_hash` (scrypt), `role` ∈ {`staff`,`admin`,`super_admin`}, `active`, `must_change_password`, `session_version`, `created_by_id`, `last_login_at`, `totp_secret`, `mfa_enabled`, `mfa_last_step` (blocks code re-use), `mfa_backup_codes` (JSONB list of SHA-256 hashes) |
+| `audit_log` | Append-only: `created_at`, `actor_id` and `owner_id` (both SET NULL on user delete), `actor_username`, `action` (e.g. `auth.login`, `patient.view`, `patient.export`), `target_type`, `target_id`, `detail`, `ip`; indexes `(owner_id, created_at)`, `created_at`, `action`. The app never updates or deletes rows |
 | `patients` | `owner_id`, `name`, `nric`, `dob`, `gender`, `contact`, `email`, `address`, `conditions` (JSONB: condition → Yes/No), `taking_western_medicine`, `western_medicine_duration`, `other_conditions`, `drug_allergies`, `last_visit_at`; index `(owner_id, name)`, `(owner_id, nric)` |
 | `visits` | `owner_id`, `patient_id` (CASCADE), `date`, `condition`, `notes`, `discharge_advice`, `status` ∈ {`draft`,`confirmed`}, `prescribed_meds` (JSONB snapshot), `services` (JSONB snapshot of name + amount), `created_at`; index `(owner_id, date)` |
 | `medicines` | `owner_id`, `sku_id` (unique per owner), `name`, `english_name`, `company`, `type` (`pills`/`grams`/`bottle`/legacy values), `barcode`, `price` NUMERIC(10,2) ≥ 0, `stock` ≥ 0, `expiry_date`; one row per batch |
@@ -182,7 +196,11 @@ Rules:
 | Stale privileges | User row re-read each request; `session_version` bumped on password/role/active change |
 | Brute force | Login rate limit (Redis-backed when multiple replicas), generic error, dummy hash for unknown users, scrypt hashing, password length ≥ 12 |
 | CSRF | Flask-WTF on all unsafe methods; state-changing GET routes were converted to POST |
-| XSS | Jinja autoescape; DOM APIs instead of string-built HTML in the appointments page; CSP restricts script/style sources; `data-confirm` instead of inline handlers built from text |
+| XSS | Jinja autoescape; DOM APIs instead of string-built HTML in the appointments page; CSP `script-src` has no `'unsafe-inline'`: inline scripts need the per-request nonce and inline event handlers are not used (`data-*` attributes instead); `tests/test_security_hardening.py` scans templates for violations |
+| Tampered CDN assets | Every third-party `<script>` / `<link>` carries a Subresource Integrity hash (`integrity` + `crossorigin`); CI test fails if one lacks it |
+| Stolen password | Optional TOTP second factor (30 s step, ±1 step drift, each code usable once), 8 single-use recovery codes stored as hashes, 5-minute / 5-try pending login, rate limits, super-admin reset path; enabling or disabling signs out other browsers |
+| No accountability / forensics | `audit_log` records sign-ins (success, failure, 2FA), password / e-mail / 2FA changes, patient view / create / update / export / erase, receipts, CSV exports and user management with actor, tenant and IP; the viewer is tenant-scoped |
+| Data-subject requests | `/patients/<id>/export.json` (access) and `/patients/delete/<id>` (erasure incl. visits), both audited |
 | Mass assignment | Explicit field whitelists per form (`_patient_from_form`, `_medicine_from_form`) |
 | Open redirect | `is_safe_next()` for `next` parameters |
 | CSV / formula injection | `csv_safe()` on exports; import limited to 2 MB / 5000 rows |
@@ -192,8 +210,11 @@ Rules:
 | Secrets | Nothing in the repo; `.gitignore` blocks key files; Kubernetes Secret created out-of-band |
 | Container | Non-root UID 10001, read-only root FS, all capabilities dropped, seccomp `RuntimeDefault`, restricted Pod Security |
 
-Known gaps (tracked in PRD §10): CSP still allows `'unsafe-inline'` scripts; CDN assets have no SRI hashes; no
-MFA; no audit log table; no per-clinic multi-user tenancy.
+Known gaps (tracked in PRD §10): `style-src` still allows `'unsafe-inline'` (templates use style attributes); the
+TOTP secret is stored unencrypted in PostgreSQL (the database volume is encrypted at rest; encrypting the column would
+tie it to a key that must survive `SECRET_KEY` rotation); two-factor is optional, not enforced; the audit log has no
+retention policy or off-database copy; erasing a patient does not touch free-text appointment rows (they are not linked
+to patients); no alerting on repeated failed logins (events are in the audit log); no per-clinic multi-user tenancy.
 
 ## 8. Configuration reference
 
@@ -233,7 +254,9 @@ flowchart TB
     end
 ```
 
-* **Image**: multi-stage `Dockerfile` (builder venv → slim runtime), non-root, `HEALTHCHECK` on `/healthz`.
+* **Image**: multi-stage `Dockerfile` (builder venv built without pip → slim runtime), non-root, `HEALTHCHECK` on
+  `/healthz`. The runtime stage applies Debian security updates (`apt-get upgrade`) and removes pip / setuptools / wheel,
+  which the app never uses at run time (they only add attack surface and scanner findings).
   gunicorn runs without the control socket and with `/dev/shm` worker temp files so the root FS can be read-only.
 * **Local**: `docker compose up --build` starts PostgreSQL, a one-shot `migrate` service (also bootstraps the first
   super admin from `BOOTSTRAP_ADMIN_*`), then the web service on `localhost:8080`.
@@ -243,12 +266,18 @@ flowchart TB
   (adds a PostgreSQL StatefulSet + nightly `pg_dump` CronJob to a PVC) and `overlays/aws-k3s` (see below), plus
   `addons/cluster-issuer.yaml` (Let's Encrypt ClusterIssuers for cert-manager). Manifests are validated against the
   Kubernetes 1.31 schema; `kustomize build` has not been run in CI.
-* **AWS reference deployment** (`overlays/aws-k3s`, runbook in `docs/deployment.md`): one EC2 `t3.medium` with an
-  Elastic IP running **k3s**, ingress-nginx (`externalTrafficPolicy=Local` to keep client IPs) and cert-manager
+* **AWS reference deployment** (`overlays/aws-k3s`, runbook in `docs/deployment.md`): one EC2 instance (`t3.medium`,
+  or `c7i-flex.large` on the AWS Free plan) with an Elastic IP running **k3s** (Kubernetes Secrets encrypted at rest with
+  `secrets-encryption`), ingress-nginx (`externalTrafficPolicy=Local` to keep client IPs) and cert-manager
   (Let's Encrypt HTTP-01), DNS via a **DuckDNS** A record to the Elastic IP, PostgreSQL as a StatefulSet on the encrypted
   EBS root volume, and a nightly CronJob (`postgres-backup-s3`) that uploads `pg_dump` files to a private, versioned,
   encrypted **S3** bucket using the instance's IAM role (IMDSv2, hop limit 2; only the backup pod may reach the metadata
   service). Extra NetworkPolicies allow the cert-manager solver and the backup pod. Single node = no high availability.
+  **Admin access** is through AWS Systems Manager Session Manager (the instance role carries
+  `AmazonSSMManagedInstanceCore`); the security group opens only 80 and 443, **not 22**. Daily EBS snapshots (Data
+  Lifecycle Manager, 7 kept, volume tag `Backup=lumieree-daily`), a CloudTrail trail (multi-region, log validation,
+  private bucket) and a Route 53 health check on `/healthz` with a CloudWatch alarm e-mailing an SNS topic
+  (`lumieree-alerts`) provide recovery, audit and uptime alerting.
 * **Migrations** run as a separate Job **before** a rollout (never at web start-up) so replicas cannot race.
   Rolling updates use `maxUnavailable: 0`; schema changes must therefore be backward compatible for one release
   (expand → deploy → contract).
@@ -261,16 +290,25 @@ flowchart TB
 
 Structured-enough text logs to stdout (`LOG_LEVEL`), including login success/failure with username and client IP,
 gunicorn access logs, and stack traces for unhandled exceptions. Probes: `/healthz` (process), `/readyz` (database).
-There is no metrics endpoint or tracing yet (PRD §10).
+Security-relevant events and access to patient records are also stored in the `audit_log` table (viewer at
+`/admin/audit`). On AWS an external Route 53 health check alarms by e-mail when `/healthz` fails. There is no metrics
+endpoint or tracing yet (PRD §10).
 
 ## 11. Testing and CI
 
 * `pytest` runs against SQLite by default and PostgreSQL when `TEST_DATABASE_URL` is set (CI). The suite covers
   authentication, authorization, tenant isolation (IDOR, mass assignment), dispensing/stock invariants, receipts,
-  CSV import/export safety, XSS escaping, rate limiting, the Firestore import mapping, and docs/code consistency.
+  CSV import/export safety, XSS escaping, rate limiting, two-factor login (replay, lock-out, recovery codes, reset),
+  the audit log, CSP nonce / SRI, patient export and erasure, the Firestore import mapping, and docs/code consistency.
 * CI (`.github/workflows/ci.yml`): `ruff check` + `ruff format --check`, `pytest` on PostgreSQL, a migration
-  round-trip (`upgrade` → `check` → `downgrade base` → `upgrade`), the docs-sync gate on pull requests, and the
-  container image build (pushed to GHCR from `main`; the owner name is lower-cased because registry names must be).
+  round-trip (`upgrade` → `check` → `downgrade base` → `upgrade`), the docs-sync gate on pull requests, a Trivy
+  filesystem scan (dependencies, secrets, Dockerfile / Kubernetes misconfiguration; fails on fixable HIGH/CRITICAL;
+  reviewed exceptions live in `.trivyignore.yaml`, each with a reason),
+  and the container image build with a Trivy image scan before it is pushed to GHCR from `main` (the owner name is
+  lower-cased because registry names must be). GitHub Actions are pinned to commit SHAs and the Dockerfile and CI
+  PostgreSQL base images to digests; `.github/dependabot.yml` opens weekly update PRs (pip, Actions, Docker).
+* `.github/workflows/zap-baseline.yml` (manual) runs a passive OWASP ZAP baseline scan against the production URL; it
+  covers the unauthenticated pages only (it does not log in), so authenticated pages rely on the tests above.
 
 ## 12. Migration from Firebase
 
@@ -294,11 +332,20 @@ history).
 | Redis only for rate limiting | Required for correct limits across replicas; holds no patient data |
 | AWS reference deployment = EC2 + k3s + S3 + DuckDNS (not EKS/RDS) | Cheapest way to run real Kubernetes for one clinic; S3 gives durable off-instance backups; EKS + RDS remain the upgrade path for HA |
 | Backups via IAM instance role, not stored AWS keys | No long-lived credentials in the cluster; NetworkPolicy limits metadata-service access to the backup pod |
+| TOTP implemented with the standard library; QR codes via `segno` | RFC 6238 is ~40 lines and avoids a heavy dependency; `segno` is pure Python with no dependencies |
+| TOTP secrets stored unencrypted in the database | An encryption key would have to survive `SECRET_KEY` rotation and live next to the database credentials anyway; revisit with a KMS-backed key |
+| Two-factor optional per account, not enforced | Avoids locking out existing users; a super admin can reset it. Enforcement for admins is a roadmap item |
+| Audit log in PostgreSQL, append-only by convention, `SET NULL` foreign keys | Survives user deletion without a separate service; the attempted name of an unknown user is never stored |
+| CSP nonces instead of extracting all inline scripts | Smallest change that removes `'unsafe-inline'` from `script-src`; inline handlers replaced by `data-*` attributes |
+| Trivy exception KSV-0014 for the in-cluster PostgreSQL StatefulSet | A read-only root filesystem needs extra `emptyDir` mounts for the socket directory and `/tmp`; changing the live database pod without a tested manifest was judged riskier than the finding. Scoped to that one file in `.trivyignore.yaml` and tracked in PRD §10 |
+| Session Manager instead of SSH, port 22 closed | Removes the internet-reachable admin port and the moving-IP allow-list; access is controlled by IAM and logged by CloudTrail |
+| GuardDuty not enabled | Requires a paid AWS account plan (the Free plan returns `SubscriptionRequiredException`); revisit after upgrading |
 
 ## 14. Change log
 
 | Date | Change |
 | --- | --- |
+| 2026-11-08 | Security hardening: optional TOTP two-factor (`/login/mfa`, `/settings/mfa/*`, users columns), `audit_log` table + `/admin/audit`, per-patient export (`/patients/<id>/export.json`), CSP nonce without `'unsafe-inline'` scripts, SRI on CDN assets (dead FullCalendar CSS/locales URLs fixed), Trivy + Dependabot + pinned Actions/base images in CI (Trivy found and the Dockerfile now fixes fixable `zlib1g` and pip-tooling findings in the image), manual ZAP baseline workflow, `segno` dependency, migration `0002_mfa_audit`; AWS: k3s secrets encryption, Session Manager with port 22 closed, daily EBS snapshots, CloudTrail, uptime alarm |
 | 2026-11-07 | S3 backup job waits for PostgreSQL (`pg_isready` loop) before `pg_dump`: k3s programs NetworkPolicy allow rules a few seconds after pod start, so the first connection was refused; runbook marked as executed end to end with tested notes (Free-plan instance type, full-SHA image tag) |
 | 2026-11-07 | CI image job lower-cases the GitHub owner in the GHCR image name (mixed-case owners made the build fail) |
 | 2026-11-07 | Added the AWS reference deployment: `k8s/overlays/aws-k3s` (S3 backup CronJob, extra NetworkPolicies), `k8s/addons/cluster-issuer.yaml`, and a full EC2 + k3s + S3 + DuckDNS runbook in `docs/deployment.md` |

@@ -1,0 +1,8 @@
+# Reviewed exceptions for the Trivy scans in CI. Keep this list short and give every entry a reason.
+misconfigurations:
+  - id: KSV-0014
+    paths:
+      - "k8s/overlays/in-cluster-postgres/postgres.yaml"
+    statement: >-
+      The PostgreSQL container needs writable /var/run/postgresql and /tmp, so a read-only root filesystem
+      requires extra emptyDir mounts that have not been tested against the live database. Tracked in PRD section 10.

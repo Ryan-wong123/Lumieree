@@ -8,10 +8,11 @@ import io
 from flask import Blueprint, Response, flash, g, redirect, render_template, request, url_for
 from sqlalchemy import func
 
+from .. import audit
 from ..auth import admin_required, create_user, current_uid, normalize_email, super_admin_required, validate_password
 from ..extensions import db
-from ..models import ROLES, Medicine, Patient, QueueItem, User, Visit
-from ..utils import ValidationError, csv_safe, parse_date, today
+from ..models import ROLES, AuditLog, Medicine, Patient, QueueItem, User, Visit
+from ..utils import ValidationError, clean, csv_safe, parse_date, to_int, today
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -101,6 +102,7 @@ def export_visits():
         .where(Visit.owner_id == current_uid(), Visit.status == "confirmed")
         .order_by(Visit.date, Visit.id)
     ).all()
+    audit.record("export.visits_csv", detail=f"{len(rows)} rows")
     return _csv_response(
         ["Patient Name", "NRIC", "Date", "Condition", "Notes", "Created At"],
         [[n, nric or "", d.isoformat(), c or "", notes or "", ca.isoformat()] for n, nric, d, c, notes, ca in rows],
@@ -120,7 +122,33 @@ def export_queue():
         patient = q.patient if q.patient and q.patient.owner_id == owner else None
         items = "; ".join(f"{i.get('quantity')}x {i.get('name')}" for i in (q.items or []))
         rows.append([patient.name if patient else "Unknown", q.status, q.created_at.isoformat(), items])
+    audit.record("export.queue_csv", detail=f"{len(rows)} rows")
     return _csv_response(["Patient Name", "Status", "Timestamp", "Items"], rows, "queue_log.csv")
+
+
+# ------------------------------------------------------------------- audit log
+AUDIT_PAGE_SIZE = 100
+
+
+@bp.get("/audit")
+@admin_required
+def audit_log():
+    """Newest first. A clinic sees events on its own account; a super admin sees everything."""
+    page = max(to_int(request.args.get("page"), 1, minimum=1), 1)
+    action = clean(request.args.get("action"), 40)
+    stmt = db.select(AuditLog).order_by(AuditLog.id.desc())
+    if not g.user.is_super_admin:
+        stmt = stmt.where(AuditLog.owner_id == current_uid())
+    if action:
+        stmt = stmt.where(AuditLog.action.startswith(action))
+    rows = db.session.execute(stmt.limit(AUDIT_PAGE_SIZE + 1).offset((page - 1) * AUDIT_PAGE_SIZE)).scalars().all()
+    return render_template(
+        "admin_audit.html",
+        entries=rows[:AUDIT_PAGE_SIZE],
+        page=page,
+        has_next=len(rows) > AUDIT_PAGE_SIZE,
+        action=action,
+    )
 
 
 # ------------------------------------------------------------ user management
@@ -143,7 +171,7 @@ def users_create():
             role = request.form.get("role", "staff")
             if role not in ("staff", "admin"):  # super admins are created via the CLI only
                 raise ValidationError("Invalid role.")
-            create_user(
+            new_user = create_user(
                 request.form.get("username", ""),
                 request.form.get("password", ""),
                 role=role,
@@ -155,6 +183,7 @@ def users_create():
             db.session.rollback()
             flash(f"❌ {exc}")
             return render_template("create_user.html"), 400
+        audit.record("admin.user_create", target_type="user", target_id=new_user.id, detail=role)
         flash("✅ User created. They must choose a new password at first login.")
         return redirect(url_for("admin.users"))
     return render_template("create_user.html")
@@ -199,10 +228,26 @@ def user_edit(uid: int):
                 user.set_password(new_password)  # also invalidates their sessions
                 user.must_change_password = True
 
+            reset_mfa = request.form.get("reset_mfa") == "on" and user.mfa_enabled
+            if reset_mfa:
+                # Recovery path for a user who lost their device and recovery codes.
+                user.mfa_enabled, user.totp_secret, user.mfa_last_step, user.mfa_backup_codes = False, None, None, []
+                user.session_version += 1
+
             if new_role != user.role or active != user.active:
                 user.session_version += 1  # force re-login so role/active changes apply now
+            changes = []
+            if new_role != user.role:
+                changes.append(f"role {user.role}->{new_role}")
+            if active != user.active:
+                changes.append("enabled" if active else "disabled")
+            if new_password:
+                changes.append("password reset")
+            if reset_mfa:
+                changes.append("2FA reset")
             user.role, user.active = new_role, active
             db.session.commit()
+            audit.record("admin.user_update", target_type="user", target_id=user.id, detail=", ".join(changes) or None)
             flash("✅ User updated.")
             return redirect(url_for("admin.users"))
         except ValidationError as exc:
@@ -224,7 +269,9 @@ def user_delete(uid: int):
         flash("❌ You cannot delete the last active super admin.")
     else:
         # Patients, visits, medicines, queue and appointments cascade via foreign keys.
+        deleted_id, deleted_name = user.id, user.username
         db.session.delete(user)
         db.session.commit()
+        audit.record("admin.user_delete", target_type="user", target_id=deleted_id, detail=deleted_name)
         flash("✅ User and all of their data were deleted.")
     return redirect(url_for("admin.users"))

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 import sqlite3
 import sys
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, g, jsonify, render_template, request
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from werkzeug.exceptions import HTTPException
@@ -27,21 +28,24 @@ def _sqlite_enforce_foreign_keys(dbapi_connection, _record):
         cursor.close()
 
 
-CSP = "; ".join(
-    [
-        "default-src 'self'",
-        # Templates still contain inline <script>/<style>; tighten with nonces when they are extracted.
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com",
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-        "font-src 'self' https://cdn.jsdelivr.net",
-        "img-src 'self' data:",
-        "connect-src 'self'",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-    ]
-)
+def build_csp(nonce: str) -> str:
+    """Content-Security-Policy for one response. Inline scripts run only with this response's nonce; the CDN
+    scripts and stylesheets additionally carry Subresource Integrity hashes in the templates."""
+    return "; ".join(
+        [
+            "default-src 'self'",
+            f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://unpkg.com",
+            # Inline style attributes are still used by the templates; scripts are the injection risk that matters.
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+            "font-src 'self' https://cdn.jsdelivr.net",
+            "img-src 'self' data:",
+            "connect-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+        ]
+    )
 
 
 def create_app(config_object=None) -> Flask:
@@ -59,6 +63,11 @@ def create_app(config_object=None) -> Flask:
     migrate.init_app(app, db, directory=os.path.join(os.path.dirname(__file__), "..", "migrations"))
     csrf.init_app(app)
     limiter.init_app(app)
+
+    @app.before_request
+    def _csp_nonce():
+        # Registered first so every later hook (and error page) can rely on it.
+        g.csp_nonce = secrets.token_urlsafe(16)
 
     from . import models  # noqa: F401  (register tables)
     from .blueprints import admin, appointments, front_desk, health, inventory, patients, receipts
@@ -100,9 +109,15 @@ def _register_hooks(app: Flask) -> None:
 
         return {"now": datetime.now}
 
+    @app.context_processor
+    def _inject_csp_nonce():
+        return {"csp_nonce": g.get("csp_nonce", "")}
+
     @app.after_request
     def _security_headers(response):
-        response.headers.setdefault("Content-Security-Policy", CSP)
+        response.headers.setdefault(
+            "Content-Security-Policy", build_csp(g.get("csp_nonce") or secrets.token_urlsafe(16))
+        )
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "same-origin")

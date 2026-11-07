@@ -145,7 +145,7 @@ input[type="date"]::-webkit-datetime-edit {
   </button>
 </form>
 
-<script>
+<script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', function () {
     const yesRadio = document.getElementById('westernYes');
     const noRadio  = document.getElementById('westernNo');

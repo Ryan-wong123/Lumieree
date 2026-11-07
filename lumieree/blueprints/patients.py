@@ -6,9 +6,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from itertools import zip_longest
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, flash, json, redirect, render_template, request, url_for
 from sqlalchemy import func, or_
 
+from .. import audit
 from ..auth import current_uid
 from ..extensions import db
 from ..models import CONDITION_FIELDS, Medicine, Patient, QueueItem, Visit
@@ -91,8 +92,10 @@ def add_patient():
         except ValidationError as exc:
             flash(f"❌ {exc}")
             return render_template("add_patient.html"), 400
-        db.session.add(Patient(owner_id=current_uid(), **data))
+        patient = Patient(owner_id=current_uid(), **data)
+        db.session.add(patient)
         db.session.commit()
+        audit.record("patient.create", target_type="patient", target_id=patient.id)
         flash("Patient added!")
         return redirect(url_for("patients.list_patients"))
     return render_template("add_patient.html")
@@ -114,6 +117,7 @@ def edit_patient(patient_id: int):
             flash(f"❌ {exc}")
             return render_template("edit_patient.html", patient=patient.to_dict()), 400
         db.session.commit()
+        audit.record("patient.update", target_type="patient", target_id=patient.id)
         flash("Patient updated successfully!")
         return redirect(url_for("patients.list_patients"))
 
@@ -126,10 +130,37 @@ def delete_patient(patient_id: int):
     if patient is None:
         flash("❌ Patient not found.")
     else:
+        patient_id = patient.id
         db.session.delete(patient)  # visits cascade; queue rows keep history with patient_id NULL
         db.session.commit()
+        audit.record("patient.delete", target_type="patient", target_id=patient_id, detail="erased with visits")
         flash("✅ Patient and their visit records deleted.")
     return redirect(url_for("patients.list_patients"))
+
+
+@bp.get("/patients/<int:patient_id>/export.json")
+def export_patient(patient_id: int):
+    """Everything held about one patient (data-access request): their record and all visits, as JSON."""
+    patient = Patient.get_owned(current_uid(), patient_id)
+    if patient is None:
+        flash("❌ Patient not found.")
+        return redirect(url_for("patients.list_patients"))
+    visits = db.session.execute(
+        db.select(Visit)
+        .where(Visit.owner_id == current_uid(), Visit.patient_id == patient.id)
+        .order_by(Visit.date, Visit.id)
+    ).scalars()
+    payload = {
+        "exported_at": datetime.now(UTC).isoformat(),
+        "patient": patient.to_dict(),
+        "visits": [v.to_dict() for v in visits],
+    }
+    audit.record("patient.export", target_type="patient", target_id=patient.id)
+    return Response(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        mimetype="application/json",
+        headers={"Content-Disposition": f"attachment; filename=patient-{patient.id}.json"},
+    )
 
 
 # ---------------------------------------------------------------------- visits
@@ -205,9 +236,11 @@ def patient_visits(patient_id: int):
             if meds:
                 db.session.add(QueueItem(owner_id=owner, patient_id=patient.id, visit_id=visit.id, items=meds))
         db.session.commit()
+        audit.record("visit.create", target_type="patient", target_id=patient.id, detail=status)
         flash("Visit saved as draft." if status == "draft" else "Visit confirmed and sent to front desk.")
         return redirect(url_for("patients.patient_visits", patient_id=patient.id))
 
+    audit.record("patient.view", target_type="patient", target_id=patient.id)
     visits = db.session.execute(
         db.select(Visit)
         .where(Visit.owner_id == owner, Visit.patient_id == patient.id, Visit.status == "confirmed")

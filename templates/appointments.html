@@ -70,16 +70,19 @@
     </tbody>
   </table>
 
-  <button type="button" class="btn btn-outline-primary" onclick="addRow()">+ {{ t('add_patient') }}</button>
+  <button type="button" id="add-row-btn" class="btn btn-outline-primary">+ {{ t('add_patient') }}</button>
   <button type="submit" class="btn btn-success mt-3">{{ t('save_appointments') }}</button>
 </form>
 
-<!-- FullCalendar CSS + JS -->
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/locales-all.min.js"></script>
+<!-- FullCalendar JS (it injects its own CSS; the former stylesheet and locales URLs returned 404) -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"
+  integrity="sha384-n4VL2mHw6ER8HxL4KH/pGa4ZTDkXrXtr5VHKdtXrgvrbP5MrydzsAFLP5kV9h9VY" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/locales-all.global.min.js"
+  integrity="sha384-YYjdcb8zuF+f20Bom2wJiymsHPYqKoDpiGAwomnTVdnFy9g3gGR7htzI0e/anxG1" crossorigin="anonymous"></script>
 
-<script>
+<script nonce="{{ csp_nonce }}">
+  document.getElementById('add-row-btn').addEventListener('click', function () { addRow(); });
+
   let calendar;
 
   function toYMD(d) {

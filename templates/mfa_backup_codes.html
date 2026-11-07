@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h4>{{ t('mfa_codes_title') }}</h4>
+<div class="alert alert-warning">{{ t('mfa_codes_hint') }}</div>
+
+<pre class="border rounded p-3 bg-light" style="max-width:320px; font-size:1.1rem;">{% for code in codes %}{{ code }}
+{% endfor %}</pre>
+
+<a class="btn btn-success" href="{{ url_for('auth.settings') }}">{{ t('mfa_codes_done') }}</a>
+
+{% endblock %}
