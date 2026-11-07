@@ -386,6 +386,7 @@ history).
 
 | Date | Change |
 | --- | --- |
+| 2026-11-09 | `failed-login-alert` waits for PostgreSQL (`pg_isready` loop) before querying: on k3s the NetworkPolicy allow rules arrive a few seconds after pod start, so the first connection was refused (same cause as the earlier backup-job fix); found by triggering the job against the live cluster |
 | 2026-11-09 | Round-two hardening: `REQUIRE_MFA_FOR_ADMINS` (administrators confined to two-factor set-up, cannot turn it off) and `flask reset-mfa`; `failed-login-alert` CronJob (+ `alert` NetworkPolicy, SNS publish via the instance role); erasing a patient also removes matching appointment entries; PostgreSQL pod read-only root filesystem (tested on a throwaway pod; Trivy exception removed); `deploy/rollback-drill.sh` run and passed; hostname moved to `deploy/site.env` |
 | 2026-11-09 | CI actions updated (still pinned to commit SHAs): checkout 7.0.1, setup-python 7.1.0, docker login 4.7.0, build-push 7.4.0, setup-buildx 4.4.1 (applied as one grouped change instead of five Dependabot PRs that would conflict and deploy five times) |
 | 2026-11-09 | Python libraries updated: Flask-Limiter 4.1.1, SQLAlchemy 2.1.8, redis 7.4.1 (Dependabot's redis 8.1.0 rejected: outside the range `limits` supports), firebase-admin >=7.7.0 for the one-off import; CI gains a Redis service and a real-Redis rate-limit test; Dependabot ignores redis major updates |
