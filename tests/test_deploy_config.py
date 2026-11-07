@@ -100,6 +100,7 @@ def test_postgres_pod_is_read_only_and_the_alert_job_is_wired_in():
     assert "failed-login-alert.yaml" in (overlay / "kustomization.yaml").read_text(encoding="utf-8")
     assert "name: alert" in (overlay / "networkpolicy-extra.yaml").read_text(encoding="utf-8")
     job = (overlay / "failed-login-alert.yaml").read_text(encoding="utf-8")
+    assert "pg_isready" in job  # waits out the NetworkPolicy start-up race (the first connection is refused)
     assert 'schedule: "*/5 * * * *"' in job and "ALERT_THRESHOLD" in job and "auth.login_failed" in job
     assert "component: alert" in job and "readOnlyRootFilesystem: true" in job
     assert not (ROOT / ".trivyignore.yaml").exists()  # the read-only exception is gone, nothing replaced it

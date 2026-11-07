@@ -57,6 +57,9 @@ spec:
                 - sh
                 - -ec
                 - |
+                  # k3s programs the NetworkPolicy allow rules a few seconds after a pod starts; the first
+                  # connection attempts are refused until then (same as the backup job), so wait for PostgreSQL.
+                  for i in $(seq 1 30); do pg_isready -q && break; sleep 2; done
                   where="action in ('auth.login_failed','auth.mfa_failed') and created_at > now() - make_interval(mins => ${ALERT_WINDOW_MINUTES})"
                   n=$(psql -tAc "select count(*) from audit_log where $where")
                   echo "$n" > /out/count
