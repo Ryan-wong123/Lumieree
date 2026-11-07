@@ -6,8 +6,9 @@ namespace: lumieree
 resources:
   - ../../base
 images:
-  - name: lumieree
-    newName: ghcr.io/ryan-wong123/lumieree
+  # The base already renamed `lumieree` to this full name, so the override must match the full name:
+  # matching `lumieree` here silently does nothing and the Deployment stays on `:latest`.
+  - name: ghcr.io/ryan-wong123/lumieree
     newTag: latest          # replace with an immutable tag (git SHA) on every release
 patches:
   - target:

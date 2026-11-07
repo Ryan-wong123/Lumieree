@@ -235,6 +235,7 @@ Imported users receive random temporary passwords and must change them at first 
 
 | Date | Change |
 | --- | --- |
+| 2026-11-08 | §6: releases now really run the pinned image tag (kustomize override fixed for the production and AWS overlays) |
 | 2026-11-08 | Security hardening: added AUTH-9…12 (two-factor), PAT-6/7 (patient export and erasure), AUD-1…3 (audit log), supply-chain and CSP/SRI NFRs, AWS operations (Session Manager, snapshots, CloudTrail, uptime alarm); roadmap updated |
 | 2026-11-07 | §6: nightly S3 backup job made reliable on k3s (waits for PostgreSQL before dumping); AWS runbook verified end to end |
 | 2026-11-07 | §6: release image build now works for mixed-case GitHub owners (lower-cased registry path) |

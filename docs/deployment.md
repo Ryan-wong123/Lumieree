@@ -301,6 +301,8 @@ kubectl -n lumieree rollout status deploy/lumieree-web --timeout=300s
 ## 11. Verify
 
 ```bash
+# The running image must end with your :<sha> tag, never :latest (a mismatched kustomize override once silently kept :latest).
+kubectl -n lumieree get deploy lumieree-web -o jsonpath='{.spec.template.spec.containers[0].image}'; echo
 kubectl -n lumieree get pods,certificate,ingress
 kubectl -n lumieree get challenge,order 2>/dev/null          # empty once the certificate is Ready
 curl -s https://${DUCK_SUBDOMAIN}.duckdns.org/healthz        # {"status":"ok"}
