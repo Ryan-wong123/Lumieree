@@ -309,7 +309,8 @@ endpoint or tracing yet (PRD §10).
   authentication, authorization, tenant isolation (IDOR, mass assignment), dispensing/stock invariants, receipts,
   CSV import/export safety, XSS escaping, rate limiting, two-factor login (replay, lock-out, recovery codes, reset),
   the audit log, CSP nonce / SRI, patient export and erasure, the Firestore import mapping, and docs/code consistency.
-* CI (`.github/workflows/ci.yml`): `ruff check` + `ruff format --check`, `pytest` on PostgreSQL, a migration
+* CI (`.github/workflows/ci.yml`): `ruff check` + `ruff format --check`, `pytest` on PostgreSQL **and a Redis service**
+  (`tests/test_ratelimit_redis.py` proves the Redis-backed login rate limit with the real client), a migration
   round-trip (`upgrade` → `check` → `downgrade base` → `upgrade`), the docs-sync gate on pull requests, a Trivy
   filesystem scan (dependencies, secrets, Dockerfile / Kubernetes misconfiguration; fails on fixable HIGH/CRITICAL;
   reviewed exceptions live in `.trivyignore.yaml`, each with a reason),
@@ -358,6 +359,7 @@ history).
 | Deploy script lives in the repo and runs from the commit being deployed | One reviewed source of truth; no unmanaged script on the server. Trade-off: whoever can merge to `main` can change what runs as the deploy, hence branch protection |
 | Migrate first, then roll out, auto-rollback on failure | Migrations are expand-only so the old version keeps working; if the new version fails its rollout or smoke test, `rollout undo` restores the previous revision (the new schema stays, which the old version tolerates) |
 | Every merge to `main` deploys, no manual approval gate | Requested; the safety net is required checks, the smoke test and automatic rollback. A GitHub `production` environment with required reviewers can be added later without changing the pipeline |
+| `redis` client held below 8 (7.4.1); Dependabot ignores its major updates | Flask-Limiter's `limits` package declares `redis<8`, and production rate limiting runs on Redis, so an unsupported client could break login with errors. A real-Redis CI test guards the combination |
 | Trivy exception KSV-0014 for the in-cluster PostgreSQL StatefulSet | A read-only root filesystem needs extra `emptyDir` mounts for the socket directory and `/tmp`; changing the live database pod without a tested manifest was judged riskier than the finding. Scoped to that one file in `.trivyignore.yaml` and tracked in PRD §10 |
 | Session Manager instead of SSH, port 22 closed | Removes the internet-reachable admin port and the moving-IP allow-list; access is controlled by IAM and logged by CloudTrail |
 | GuardDuty not enabled | Requires a paid AWS account plan (the Free plan returns `SubscriptionRequiredException`); revisit after upgrading |
