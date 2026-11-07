@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: lumieree
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - redis.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+# The migration Job is deliberately NOT in the base: Jobs are immutable, so it is applied by the
+# deploy procedure (see docs/deployment.md) with `kubectl delete job ... && kubectl apply -f migrate-job.yaml`.
+images:
+  - name: lumieree
+    newName: ghcr.io/ryan-wong123/lumieree
+    newTag: latest
+labels:
+  - pairs:
+      app.kubernetes.io/name: lumieree
+      app.kubernetes.io/part-of: lumieree

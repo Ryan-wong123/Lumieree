@@ -1,0 +1,83 @@
+# Nightly PostgreSQL backup -> S3.
+# Needs: ConfigMap `lumieree-backup` (BACKUP_BUCKET, AWS_DEFAULT_REGION), Secret `postgres-credentials`, and an EC2
+# instance profile allowing s3:PutObject on the bucket. Credentials come from the instance metadata service (IMDSv2,
+# hop limit 2); only this pod is allowed to reach it (see networkpolicy-extra.yaml). Retention: S3 lifecycle rule.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup-s3
+spec:
+  schedule: "17 18 * * *"          # 02:17 Singapore time (UTC+8)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: dump
+              image: postgres:16-alpine
+              env:
+                - {name: PGHOST, value: postgres}
+                - {name: PGUSER, value: lumieree}
+                - {name: PGDATABASE, value: lumieree}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef: {name: postgres-credentials, key: POSTGRES_PASSWORD}
+              command: ["sh", "-ec", "pg_dump --format=custom --file=/backup/lumieree.dump && ls -l /backup"]
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {cpu: 500m, memory: 256Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - {name: backup, mountPath: /backup}
+          containers:
+            - name: upload
+              image: amazon/aws-cli:2.17.40
+              envFrom:
+                - configMapRef:
+                    name: lumieree-backup
+              env:
+                - {name: HOME, value: /tmp}
+              command:
+                - sh
+                - -ec
+                - |
+                  key="postgres/lumieree-$(date -u +%Y%m%d-%H%M%S).dump"
+                  aws s3 cp /backup/lumieree.dump "s3://${BACKUP_BUCKET}/${key}" --sse AES256 --only-show-errors
+                  echo "uploaded s3://${BACKUP_BUCKET}/${key}"
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {cpu: 500m, memory: 384Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - {name: backup, mountPath: /backup, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: backup
+              emptyDir: {sizeLimit: 2Gi}
+            - name: tmp
+              emptyDir: {}

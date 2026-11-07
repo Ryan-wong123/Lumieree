@@ -1,0 +1,54 @@
+# Extra policies needed on top of the default-deny in base/.
+# 1) cert-manager's HTTP-01 solver pods are created in this namespace and must be reachable from ingress-nginx.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-acme-http01-solver
+spec:
+  podSelector:
+    matchLabels:
+      acme.cert-manager.io/http01-solver: "true"
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - {protocol: TCP, port: 8089}
+---
+# 2) The S3 backup pod: DNS, PostgreSQL, HTTPS to S3, and the instance metadata service for IAM-role credentials.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backup
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: backup
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32
+      ports:
+        - {protocol: TCP, port: 80}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [169.254.169.254/32]
+      ports:
+        - {protocol: TCP, port: 443}

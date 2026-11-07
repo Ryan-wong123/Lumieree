@@ -1,0 +1,29 @@
+# Production: managed PostgreSQL (DATABASE_URL points at it, ideally with ?sslmode=require).
+# CI sets the image tag:  kustomize edit set image lumieree=ghcr.io/<owner>/lumieree:<git-sha>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: lumieree
+resources:
+  - ../../base
+images:
+  - name: lumieree
+    newName: ghcr.io/ryan-wong123/lumieree
+    newTag: latest          # replace with an immutable tag (git SHA) on every release
+patches:
+  - target:
+      kind: Ingress
+      name: lumieree
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: lumieree.example.com      # <- your public hostname
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: lumieree.example.com
+  - target:
+      kind: Deployment
+      name: lumieree-web
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3

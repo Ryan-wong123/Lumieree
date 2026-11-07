@@ -14,6 +14,7 @@ input[type="date"]::-webkit-datetime-edit {
 </style>
 
 <form method="POST">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <!-- Medicine Name -->
   <label class="form-label">{{ t('medicine_name') }}</label>
@@ -78,12 +79,15 @@ input[type="date"]::-webkit-datetime-edit {
     <option value="" disabled {% if not cur %}selected{% endif %}>
       -- {{ t('select_type') }} --
     </option>
-    {% for t in medicine_types %}
-      <option value="{{ t }}" {% if t|lower == cur %}selected{% endif %}>
-        {{ t }}
+    {% for code in medicine_types %}
+      <option value="{{ code }}" {% if code|lower == cur %}selected{% endif %}>
+        {{ t(code) }}
       </option>
     {% endfor %}
   </select>
+
+  <label class="form-label">{{ t('barcode') }}</label>
+  <input name="barcode" value="{{ medicine.barcode|default('') }}" class="form-control mb-4" maxlength="64" autocomplete="off">
 
   <button class="btn btn-primary">{{ t('save_changes') }}</button>
 </form>
@@ -91,8 +95,9 @@ input[type="date"]::-webkit-datetime-edit {
 <form
   method="POST"
   action="/inventory/delete/{{ medicine.id }}"
-  onsubmit="return confirm('{{ t('confirm_delete_medicine') }}');"
+  data-confirm="{{ t('confirm_delete_medicine') }}"
 >
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button class="btn btn-danger mt-2">🗑️ {{ t('delete_medicine') }}</button>
 </form>
 

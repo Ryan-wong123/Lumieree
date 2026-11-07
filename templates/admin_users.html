@@ -1,8 +1,8 @@
 {% extends "layout.html" %}
 {% block content %}
-<h3>Super Admin – User Management</h3>
+<h3>{{ t('super_admin') }} – {{ t('user_management') }}</h3>
 
-<a class="btn btn-primary mb-3" href="{{ url_for('admin_users_create') }}">
+<a class="btn btn-primary mb-3" href="{{ url_for('admin.users_create') }}">
   ➕ {{ t('create_new_user') }}
 </a>
 
@@ -20,28 +20,28 @@
     {% for u in users %}
     <tr>
       <td>
-        <strong>{{ u.email }}</strong><br>
-        <small class="text-muted">{{ u.uid }}</small>
+        <strong>{{ u.username }}</strong><br>
+        <small class="text-muted">{{ u.email or '' }}</small>
       </td>
-      <td>{{ u.role }}</td>
-      <td>{{ u.active }}</td>
-      <td>{{ u.created_by }}</td>
+      <td>{{ t(u.role) }}</td>
+      <td>{{ t('yes') if u.active else t('no') }}</td>
+      <td>{{ u.created_by.username if u.created_by else '' }}</td>
       <td>
-        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_user_edit', uid=u.uid) }}">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.user_edit', uid=u.id) }}">
           ✏️ {{ t('edit') }}
         </a>
-        {% if u.uid != session.user %}
+        {% if u.id != current_user.id %}
           <form method="POST"
-                action="{{ url_for('admin_user_delete', uid=u.uid) }}"
+                action="{{ url_for('admin.user_delete', uid=u.id) }}"
                 class="d-inline"
-                onsubmit="return confirm('Delete this user, their Firestore data, and Firebase Authentication account? This cannot be undone.');">
+                data-confirm="{{ t('confirm_delete_user') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-outline-danger" type="submit">
-              Delete
+              {{ t('delete') }}
             </button>
           </form>
         {% endif %}
       </td>
-
     </tr>
     {% endfor %}
   </tbody>

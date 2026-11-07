@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lumieree-config
+data:
+  APP_ENV: "production"
+  LOG_LEVEL: "INFO"
+  PORT: "8080"
+  WEB_CONCURRENCY: "2"
+  # One proxy hop (the ingress controller). Raise if a CDN / L7 load balancer sits in front too.
+  TRUSTED_PROXY_COUNT: "1"
+  SESSION_COOKIE_SECURE: "true"
+  # Shared rate-limit counters across replicas.
+  RATELIMIT_STORAGE_URI: "redis://redis:6379/0"
+  LOGIN_RATE_LIMIT: "10 per minute;60 per hour"
+  # Receipt header
+  CLINIC_NAME: "Harmony TCM Healthcare"
+  CLINIC_NAME_ZH: "春秋堂中医药诊所"
+  CLINIC_REG_NO: "201223383"
+  CLINIC_ADDRESS: "Blk 412 Bedok North Ave 2 #01-142 Singapore 460412    Tel: 9072 1288"

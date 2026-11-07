@@ -3,25 +3,33 @@
 <h3>{{ t('create_new_user') }}</h3>
 
 <form method="POST" style="max-width:400px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="mb-2">
-    <label>{{ t('email') }}</label>
-    <input class="form-control" name="email" placeholder="name or name@gmail.com" required>
+    <label class="form-label">{{ t('username') }}</label>
+    <input class="form-control" name="username" autocomplete="off" required minlength="2" maxlength="64"
+           pattern="[A-Za-z0-9][A-Za-z0-9._\-]+">
   </div>
 
   <div class="mb-2">
-    <label>{{ t('password') }}</label>
-    <input class="form-control" name="password" type="password" required>
+    <label class="form-label">{{ t('email') }}</label>
+    <input class="form-control" name="email" type="email" autocomplete="off">
+  </div>
+
+  <div class="mb-2">
+    <label class="form-label">{{ t('temporary_password') }}</label>
+    <input class="form-control" name="password" type="password" autocomplete="new-password" required minlength="12">
+    <div class="form-text">{{ t('password_hint') }}</div>
   </div>
 
   <div class="mb-3">
-    <label>{{ t('role') }}</label>
+    <label class="form-label">{{ t('role') }}</label>
     <select class="form-select" name="role">
-      <option value="{{ t('staff') }}">{{ t('staff') }}</option>
-      <option value="{{ t('admin') }}">{{ t('admin') }}</option>
+      <option value="staff">{{ t('staff') }}</option>
+      <option value="admin">{{ t('admin') }}</option>
     </select>
   </div>
 
   <button class="btn btn-success">{{ t('submit') }}</button>
-  <a class="btn btn-secondary" href="{{ url_for('admin_users') }}">{{ t('back') }}</a>
+  <a class="btn btn-secondary" href="{{ url_for('admin.users') }}">{{ t('back') }}</a>
 </form>
 {% endblock %}

@@ -16,6 +16,7 @@
 </form>
 <!-- CSV Import -->
 <form method="POST" action="/inventory/import_csv" enctype="multipart/form-data" class="d-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" style="display:none"
     onchange="this.form.submit()" />
   <button type="button" class="btn btn-outline-secondary mb-3" onclick="document.getElementById('csv_file').click()">
@@ -130,13 +131,11 @@
   function updateScanButton(scanning) {
     if (!activeScanButton) return;
     if (scanning) {
-      activeScanButton.innerHTML = '<i class="bi bi-stop-circle"></i> {{ t('
-      stop_scanning ') }}';
+      activeScanButton.innerHTML = '<i class="bi bi-stop-circle"></i> ' + {{ t('stop_scanning')|tojson }};
       activeScanButton.classList.remove("btn-outline-primary");
       activeScanButton.classList.add("btn-outline-danger");
     } else {
-      activeScanButton.innerHTML = '<i class="bi bi-camera"></i> {{ t('
-      scan ') }}';
+      activeScanButton.innerHTML = '<i class="bi bi-camera"></i> ' + {{ t('scan')|tojson }};
       activeScanButton.classList.remove("btn-outline-danger");
       activeScanButton.classList.add("btn-outline-primary");
       activeScanButton = null;

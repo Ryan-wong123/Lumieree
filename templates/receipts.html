@@ -4,7 +4,8 @@
 <h4>{{ t('receipt_for') }} {{ patient.name }}</h4>
 
 <form id="servicesForm" method="POST" action="/generate_receipt_pdf">
-  <input type="hidden" name="patient_name" value="{{ patient.name }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="queue_id" value="{{ queue_data.id }}">
   <input type="hidden" name="use_meds_master" id="useMedsMasterField" value="{{ '1' if items else '0' }}">
 
   <!-- Prescribed Medicines Section -->
