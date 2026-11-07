@@ -39,7 +39,9 @@ spec:
                 - name: PGPASSWORD
                   valueFrom:
                     secretKeyRef: {name: postgres-credentials, key: POSTGRES_PASSWORD}
-              command: ["sh", "-ec", "pg_dump --format=custom --file=/backup/lumieree.dump && ls -l /backup"]
+              # Wait for the NetworkPolicy allow rules to be programmed for this new pod (k3s applies them a few seconds
+              # after the pod starts; the first connection attempts are refused), then dump.
+              command: ["sh", "-ec", "for i in $(seq 1 30); do pg_isready -q && break; sleep 2; done; pg_dump --format=custom --file=/backup/lumieree.dump && ls -l /backup"]
               resources:
                 requests: {cpu: 50m, memory: 64Mi}
                 limits: {cpu: 500m, memory: 256Mi}
